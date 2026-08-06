@@ -1,0 +1,6 @@
+{
+  "swift.path": "/usr/bin/swift",
+  "swift.format.path": "/usr/bin/swift-format",
+  "swift.languageServerMode": "sourceKit",
+  "swift.disableAutoResolve": false
+}
