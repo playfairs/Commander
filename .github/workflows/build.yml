@@ -20,9 +20,21 @@ jobs:
           ./tools/make_app_bundle.sh
           ./tools/make_dmg_and_pkg.sh
 
+      - name: Package app bundle
+        run: |
+          if [ -d dist/Commander.app ]; then
+            tar -czf dist/Commander.app.tar.gz -C dist Commander.app
+          fi
+
       - name: Remove quarantine from artifacts
         run: |
           xattr -rd com.apple.quarantine dist/* 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: commander-release-macos-app-${{ github.sha }}
+          path: dist/Commander.app.tar.gz
+          if-no-files-found: error
 
       - uses: actions/upload-artifact@v6
         with:
