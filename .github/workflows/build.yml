@@ -44,6 +44,6 @@ jobs:
           name: ${{ github.ref_name }}
           body: Automated build for ${{ github.ref_name }}
           files: |
-            dist/*.dmg
-            dist/packages/*.pkg
+            dist/Commander-*.dmg
+            dist/packages/Commander.pkg
           fail_on_unmatched_files: false

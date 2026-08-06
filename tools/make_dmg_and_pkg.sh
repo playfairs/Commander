@@ -18,7 +18,7 @@ DMG_PATH="$DIST_DIR/${APP_NAME}-${VERSION}.dmg"
 echo "Creating DMG at $DMG_PATH"
 hdiutil create -volname "$APP_NAME" -srcfolder "$APP_BUNDLE" -ov -format UDZO "$DMG_PATH"
 
-PKG_PATH="$DIST_DIR/packages/${APP_NAME}-${VERSION}.pkg"
+PKG_PATH="$DIST_DIR/packages/${APP_NAME}.pkg"
 echo "Creating PKG at $PKG_PATH"
 PKGROOT="$DIST_DIR/pkgroot"
 rm -rf "$PKGROOT"
