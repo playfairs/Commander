@@ -27,11 +27,11 @@ jobs:
       - uses: actions/upload-artifact@v6
         with:
           name: commander-release-macos-dmg-${{ github.sha }}
-          path: dist/Commander-${{ github.sha }}.dmg
+          path: dist/*.dmg
           if-no-files-found: error
 
       - uses: actions/upload-artifact@v6
         with:
           name: commander-release-macos-pkg-${{ github.sha }}
-          path: dist/packages/Commander-${{ github.sha }}.pkg
+          path: dist/packages/*.pkg
           if-no-files-found: error
