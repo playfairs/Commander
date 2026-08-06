@@ -16,10 +16,24 @@ let package = Package(
     .executableTarget(
       name: "Commander",
       path: ".",
+      exclude: [
+        "scripts",
+        "nix",
+        "flake.nix",
+        "flake.lock",
+        "justfile",
+        "README.md",
+        "LICENSE"
+      ],
       sources: ["Sources/Commander"],
       resources: [
         .process("Assets")
       ]
+    ),
+    .testTarget(
+      name: "CommanderTests",
+      dependencies: ["Commander"],
+      path: "Tests/CommanderTests"
     )
   ]
 )
