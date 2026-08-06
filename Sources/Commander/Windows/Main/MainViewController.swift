@@ -3,7 +3,8 @@ import Quartz
 
 private func isDirectory(_ url: URL) -> Bool {
   var isDirectory: ObjCBool = false
-  return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
+  return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+    && isDirectory.boolValue
 }
 
 private final class BrowserTableView: NSTableView {
@@ -697,7 +698,8 @@ private final class BrowserPaneViewController: NSViewController {
 
   private func isDirectory(_ url: URL) -> Bool {
     var isDirectory: ObjCBool = false
-    return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
+    return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+      && isDirectory.boolValue
   }
 
   @objc fileprivate func goBack() {
