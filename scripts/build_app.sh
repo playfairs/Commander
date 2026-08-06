@@ -15,8 +15,14 @@ echo "Building ${APP_NAME} (version ${VERSION}) into ${BUILD_DIR}..."
 swift build -c release
 
 BIN_PATH=".build/release/${APP_NAME}"
+BUNDLE_PATH=".build/release/${APP_NAME}_${APP_NAME}.bundle"
 if [ ! -f "${BIN_PATH}" ]; then
   echo "Build output not found at ${BIN_PATH}" >&2
+  exit 1
+fi
+
+if [ ! -d "${BUNDLE_PATH}" ]; then
+  echo "Resource bundle not found at ${BUNDLE_PATH}" >&2
   exit 1
 fi
 
@@ -28,6 +34,7 @@ RESOURCES_DIR="${CONTENTS}/Resources"
 rm -rf "${APP_DIR}"
 mkdir -p "${MACOS_DIR}" "${RESOURCES_DIR}"
 cp "${BIN_PATH}" "${MACOS_DIR}/${APP_NAME}"
+cp -R "${BUNDLE_PATH}" "${RESOURCES_DIR}/"
 chmod +x "${MACOS_DIR}/${APP_NAME}"
 
 cat > "${CONTENTS}/Info.plist" <<EOF
