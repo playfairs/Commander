@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-latest
@@ -24,28 +27,22 @@ jobs:
         run: |
           ./tools/make_dmg_and_pkg.sh
 
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        with:
-          tag_name: ${{ github.ref_name }}
-          release_name: ${{ github.ref_name }}
-          body: "Automated build for ${{ github.ref_name }}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Ensure GitHub CLI
+        run: |
+          if ! command -v gh >/dev/null 2>&1; then
+            brew install gh
+          fi
 
-      - name: Upload DMG
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: dist/Commander-${{ github.ref_name }}.dmg
-          asset_name: Commander-${{ github.ref_name }}.dmg
-          asset_content_type: application/x-apple-diskimage
+      - name: Publish Release and upload assets
+        run: |
+          TAG_NAME="${{ github.ref_name }}"
+          DMG="dist/Commander-${TAG_NAME}.dmg"
+          PKG="dist/packages/Commander-${TAG_NAME}.pkg"
 
-      - name: Upload PKG
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: dist/packages/Commander-${{ github.ref_name }}.pkg
-          asset_name: Commander-${{ github.ref_name }}.pkg
-          asset_content_type: application/octet-stream
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" "$DMG" "$PKG" --clobber
+          else
+            gh release create "$TAG_NAME" "$DMG" "$PKG" \
+              --title "$TAG_NAME" \
+              --notes "Automated build for $TAG_NAME"
+          fi
