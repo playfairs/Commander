@@ -13,28 +13,37 @@ import AppKit
       let candidatePaths: [URL] = {
         var urls = [URL]()
         if let mainRes = Bundle.main.resourceURL {
-          urls.append(mainRes.appendingPathComponent("Commander_Commander.bundle/")
-            .appendingPathComponent("\(name).icns"))
-          urls.append(mainRes.appendingPathComponent("Commander_Commander.bundle/Assets/Icons/icns")
-            .appendingPathComponent("\(name).icns"))
-          urls.append(mainRes.appendingPathComponent("Assets/Icons/icns")
-            .appendingPathComponent("\(name).icns"))
+          urls.append(
+            mainRes.appendingPathComponent("Commander_Commander.bundle/")
+              .appendingPathComponent("\(name).icns"))
+          urls.append(
+            mainRes.appendingPathComponent("Commander_Commander.bundle/Assets/Icons/icns")
+              .appendingPathComponent("\(name).icns"))
+          urls.append(
+            mainRes.appendingPathComponent("Assets/Icons/icns")
+              .appendingPathComponent("\(name).icns"))
         }
 
         let cwdPath = FileManager.default.currentDirectoryPath
-        urls.append(URL(fileURLWithPath: cwdPath)
-          .appendingPathComponent("Assets/Icons/icns")
-          .appendingPathComponent("\(name).icns"))
+        urls.append(
+          URL(fileURLWithPath: cwdPath)
+            .appendingPathComponent("Assets/Icons/icns")
+            .appendingPathComponent("\(name).icns"))
 
         if let exe = Bundle.main.executableURL {
           var dir = exe.deletingLastPathComponent()
           for _ in 0..<6 {
-            urls.append(dir.appendingPathComponent("Contents/Resources/Commander_Commander.bundle/Assets/Icons/icns")
+            urls.append(
+              dir.appendingPathComponent(
+                "Contents/Resources/Commander_Commander.bundle/Assets/Icons/icns"
+              )
               .appendingPathComponent("\(name).icns"))
-            urls.append(dir.appendingPathComponent("Contents/Resources/Assets/Icons/icns")
-              .appendingPathComponent("\(name).icns"))
-            urls.append(dir.appendingPathComponent("Assets/Icons/icns")
-              .appendingPathComponent("\(name).icns"))
+            urls.append(
+              dir.appendingPathComponent("Contents/Resources/Assets/Icons/icns")
+                .appendingPathComponent("\(name).icns"))
+            urls.append(
+              dir.appendingPathComponent("Assets/Icons/icns")
+                .appendingPathComponent("\(name).icns"))
             dir.deleteLastPathComponent()
           }
         }
@@ -56,11 +65,14 @@ import AppKit
         urls.append(mainRes.appendingPathComponent("Commander_Commander.bundle/Assets/Icons/icns"))
         urls.append(mainRes.appendingPathComponent("Assets/Icons/icns"))
       }
-      urls.append(URL(fileURLWithPath: fm.currentDirectoryPath).appendingPathComponent("Assets/Icons/icns"))
+      urls.append(
+        URL(fileURLWithPath: fm.currentDirectoryPath).appendingPathComponent("Assets/Icons/icns"))
       if let exe = Bundle.main.executableURL {
         var dir = exe.deletingLastPathComponent()
         for _ in 0..<6 {
-          urls.append(dir.appendingPathComponent("Contents/Resources/Commander_Commander.bundle/Assets/Icons/icns"))
+          urls.append(
+            dir.appendingPathComponent(
+              "Contents/Resources/Commander_Commander.bundle/Assets/Icons/icns"))
           urls.append(dir.appendingPathComponent("Contents/Resources/Assets/Icons/icns"))
           urls.append(dir.appendingPathComponent("Assets/Icons/icns"))
           dir.deleteLastPathComponent()
@@ -70,7 +82,8 @@ import AppKit
     }()
 
     for dir in candidateDirs {
-      guard let entries = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { continue }
+      guard let entries = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
+      else { continue }
       for file in entries where file.pathExtension.lowercased() == "icns" {
         if let img = NSImage(contentsOf: file) {
           NSApp.applicationIconImage = img

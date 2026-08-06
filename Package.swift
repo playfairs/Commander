@@ -23,7 +23,7 @@ let package = Package(
         "flake.lock",
         "justfile",
         "README.md",
-        "LICENSE"
+        "LICENSE",
       ],
       sources: ["Sources/Commander"],
       resources: [
@@ -34,6 +34,6 @@ let package = Package(
       name: "CommanderTests",
       dependencies: ["Commander"],
       path: "Tests/CommanderTests"
-    )
+    ),
   ]
 )
