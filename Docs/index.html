@@ -1,0 +1,74 @@
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Commander</title>
+  <link rel="icon" type="image/png" href="icon.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="hero">
+    <div class="container">
+      <p class="eyebrow"><span class="eyebrow-dot"></span> Commander</p>
+      <h1>"Modern" native macOS file management</h1>
+      <p class="hero-meta">Swift • AppKit</p>
+      <p class="subtitle">
+        Commander is a lightweight, native macOS file manager written entirely in Swift. It is not meant to replace Finder, but to offer another approach: a simpler, more native alternative to tools like Commander One.
+      </p>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="about" class="section">
+      <h2>About Commander</h2>
+      <p>
+        Commander is a modern macOS file browser designed to feel familiar and responsive without trying to be a full Finder replacement. Built with Swift and native frameworks, it aims to provide a cleaner, lighter alternative to Finder and a more straightforward, native option compared with apps like Commander One.
+      </p>
+      <p>
+        The app focuses on fast browsing, simple navigation, and everyday file operations for users who want a minimalist but capable file management experience. Also has split tabs :) My main focus on the app was for Split tabs and Drag and Drop.
+      </p>
+    </section>
+
+    <section id="features" class="section cards">
+      <h2>What it offers</h2>
+      <div class="card-grid">
+        <article class="card">
+          <h3>Native macOS UI</h3>
+          <p>Uses Swift and AppKit for a native experience with fast performance and fluid window management.</p>
+        </article>
+        <article class="card">
+          <h3>File operations</h3>
+          <p>Includes copy, move, rename, trash, delete, and duplicate operations with clear actions and progress handling.</p>
+        </article>
+        <article class="card">
+          <h3>Preview support</h3>
+          <p>Preview files with a dedicated panel and thumbnail support for quick browsing without opening documents.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="getting-started" class="section split">
+      <div>
+        <h2>Getting started</h2>
+        <p>
+          Build the project using Swift Package Manager or open it in Xcode. The app is intended to run on modern macOS versions.
+        </p>
+        <ul>
+          <li>Open <code>Package.swift</code> in Xcode.</li>
+          <li>Build and run the Commander target.</li>
+          <li>Use the in-app browser, sidebar, and file preview features.</li>
+        </ul>
+      </div>
+      <div>
+        <h2>Notes</h2>
+        <p>
+          This project is in active development. Some features may still be incomplete and the UI may evolve over time.
+        </p>
+        <p>
+          Contributions and improvements are welcome, especially around app polish, workflow refinements, and CI/CD build automation. I hate CI/CD, so if ANYONE can help me with it, please.
+        </p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
