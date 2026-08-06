@@ -56,6 +56,7 @@ final class MainViewController: NSViewController {
     private let splitController = NSSplitViewController()
     private let statusBar = NSTextField(labelWithString: "")
     private let statusSeparator = NSBox()
+    private let statusContainer = NSView()
 
     private var showHiddenFiles = false
     private weak var activePane: BrowserPaneViewController?
@@ -80,7 +81,12 @@ final class MainViewController: NSViewController {
         configureSplitController()
         configureStatusBar()
 
-        let container = NSStackView(views: [splitController.view, statusSeparator, statusBar])
+        statusContainer.translatesAutoresizingMaskIntoConstraints = false
+        statusContainer.wantsLayer = true
+        statusContainer.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        statusContainer.addSubview(statusBar)
+
+        let container = NSStackView(views: [splitController.view, statusSeparator, statusContainer])
         container.orientation = .vertical
         container.alignment = .leading
         container.distribution = .fill
@@ -95,7 +101,10 @@ final class MainViewController: NSViewController {
             container.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             container.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             splitController.view.heightAnchor.constraint(greaterThanOrEqualToConstant: 320),
-            statusBar.heightAnchor.constraint(equalToConstant: 24),
+            statusContainer.heightAnchor.constraint(equalToConstant: 28),
+            statusBar.leadingAnchor.constraint(equalTo: statusContainer.leadingAnchor, constant: 12),
+            statusBar.trailingAnchor.constraint(equalTo: statusContainer.trailingAnchor, constant: -12),
+            statusBar.centerYAnchor.constraint(equalTo: statusContainer.centerYAnchor),
             statusSeparator.heightAnchor.constraint(equalToConstant: 1),
             splitController.view.widthAnchor.constraint(equalTo: container.widthAnchor)
         ])
@@ -697,61 +706,40 @@ private final class BrowserPaneViewController: NSViewController {
     }
 
     @objc fileprivate func showSelectedInfo() {
-        let selection = selectedItem ?? DirectoryItem(url: currentURL)
-        let message = "Name: \(selection.name)\nKind: \(selection.kind)\nSize: \(selection.size)\nModified: \(selection.modified)\nPath: \(selection.url.path)"
-        let alert = NSAlert()
-        alert.messageText = "Info"
-        alert.informativeText = message
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
+        let url = selectedItem?.url ?? currentURL
+        showFinderInfo(for: url)
+    }
+
+    private func showFinderInfo(for url: URL) {
+        let escapedPath = url.path.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
+        let script = """
+        tell application "Finder"
+            activate
+            set theItem to POSIX file "\(escapedPath)" as alias
+            open information window of theItem
+        end tell
+        """
+
+        if let appleScript = NSAppleScript(source: script) {
+            var errorInfo: NSDictionary?
+            appleScript.executeAndReturnError(&errorInfo)
+            if let errorInfo {
+                NSLog("Failed to open Finder info: %@", errorInfo)
+            }
+        }
     }
 
     fileprivate func search(query: String, fullSearch: Bool) {
-        let workspace = FileManager.default
-        let searchTerm = query.lowercased()
-        var baseURLs: [URL] = [currentURL]
-        if fullSearch {
-            let home = workspace.homeDirectoryForCurrentUser
-            baseURLs.append(home)
-            let volumes = URL(fileURLWithPath: "/Volumes")
-            if workspace.fileExists(atPath: volumes.path) {
-                baseURLs.append(volumes)
-            }
-        } else {
-            var url = currentURL
-            while let parent = parentURL(for: url) {
-                baseURLs.append(parent)
-                url = parent
-            }
-        }
-
-        let hiddenSearch = showHiddenFiles
-        let roots = baseURLs
-        let progress = Progress(totalUnitCount: 1)
-        progress.becomeCurrent(withPendingUnitCount: 1)
-        DispatchQueue.global(qos: .userInitiated).async {
-            var matches: [URL] = []
-            let searchOptions: FileManager.DirectoryEnumerationOptions = hiddenSearch ? [.skipsPackageDescendants] : [.skipsHiddenFiles, .skipsPackageDescendants]
-            for base in roots {
-                let enumerator = FileManager.default.enumerator(at: base, includingPropertiesForKeys: [.isDirectoryKey], options: searchOptions, errorHandler: nil)
-                while let item = enumerator?.nextObject() as? URL {
-                    if matches.count >= 200 { break }
-                    if item.lastPathComponent.lowercased().contains(searchTerm) {
-                        matches.append(item)
-                    }
-                }
-                if matches.count >= 200 { break }
-            }
-            DispatchQueue.main.async {
-                progress.resignCurrent()
-                let description = fullSearch ? "Full search" : "Quick search"
-                if matches.isEmpty {
-                    self.presentSearchResults(title: description, message: "No matches found for \(query).")
-                } else {
-                    let firstPaths = matches.prefix(6).map { $0.path }.joined(separator: "\n")
-                    self.presentSearchResults(title: description, message: "Found \(matches.count) matches:\n\n\(firstPaths)")
-                }
+        let searchQuery = SearchQuery(term: query, fullSearch: fullSearch)
+        Task { [weak self] in
+            guard let self = self else { return }
+            let matches = await SearchController.search(query: searchQuery, from: self.currentURL, showHiddenFiles: self.showHiddenFiles)
+            let description = fullSearch ? "Full search" : "Quick search"
+            if matches.isEmpty {
+                self.presentSearchResults(title: description, message: "No matches found for \(query).")
+            } else {
+                let firstPaths = matches.prefix(6).map { $0.path }.joined(separator: "\n")
+                self.presentSearchResults(title: description, message: "Found \(matches.count) matches:\n\n\(firstPaths)")
             }
         }
     }
@@ -787,7 +775,8 @@ private final class BrowserPaneViewController: NSViewController {
     }
 
     @objc private func pathSelected(_ sender: NSPathControl) {
-        guard let url = sender.url else { return }
+        let selectedURL = sender.clickedPathItem?.url ?? sender.url
+        guard let url = selectedURL else { return }
         loadDirectory(url, replaceHistory: false)
         activatePane()
     }
@@ -1085,14 +1074,24 @@ extension BrowserPaneViewController: NSTableViewDataSource, NSTableViewDelegate 
 
             cell.addSubview(imageView)
             cell.addSubview(textField)
+            imageView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            imageView.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            textField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            textField.setContentHuggingPriority(.defaultLow, for: .horizontal)
+            let imageWidth = imageView.widthAnchor.constraint(equalToConstant: 16)
+            imageWidth.priority = .defaultLow
+            let imageHeight = imageView.heightAnchor.constraint(equalToConstant: 16)
+            imageHeight.priority = .defaultLow
+            let textTrailing = textField.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor, constant: -8)
+            textTrailing.priority = .defaultLow
             NSLayoutConstraint.activate([
                 imageView.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
                 imageView.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-                imageView.widthAnchor.constraint(equalToConstant: 16),
-                imageView.heightAnchor.constraint(equalToConstant: 16),
+                imageWidth,
+                imageHeight,
                 textField.leadingAnchor.constraint(equalTo: imageView.trailingAnchor, constant: 8),
                 textField.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-                textField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8)
+                textTrailing
             ])
             return cell
         }
@@ -1114,11 +1113,15 @@ extension BrowserPaneViewController: NSTableViewDataSource, NSTableViewDelegate 
         textField.textColor = .labelColor
         textField.translatesAutoresizingMaskIntoConstraints = false
         textField.alignment = identifier == .size ? .right : .left
+        textField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        textField.setContentHuggingPriority(.defaultLow, for: .horizontal)
         cell.addSubview(textField)
+        let textTrailing = textField.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor, constant: -8)
+        textTrailing.priority = .defaultLow
 
         NSLayoutConstraint.activate([
             textField.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
-            textField.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
+            textTrailing,
             textField.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
         ])
         return cell

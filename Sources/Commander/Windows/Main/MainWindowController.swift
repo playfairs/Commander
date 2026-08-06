@@ -36,8 +36,7 @@ extension MainWindowController: NSToolbarDelegate {
             .flexibleSpace,
             .viewList,
             .viewGrid,
-            .info,
-            .newTab
+            .info
         ]
     }
 
@@ -49,8 +48,7 @@ extension MainWindowController: NSToolbarDelegate {
             .flexibleSpace,
             .viewList,
             .viewGrid,
-            .info,
-            .newTab
+            .info
         ]
     }
 
@@ -68,8 +66,6 @@ extension MainWindowController: NSToolbarDelegate {
             return toolbarItem(identifier: .viewGrid, image: NSImage(systemSymbolName: "square.grid.2x2", accessibilityDescription: "Grid"), label: "Grid")
         case .info:
             return toolbarItem(identifier: .info, image: NSImage(systemSymbolName: "info.circle", accessibilityDescription: "Info"), label: "Info")
-        case .newTab:
-            return toolbarItem(identifier: .newTab, image: NSImage(systemSymbolName: "plus", accessibilityDescription: "New Tab"), label: "New Tab")
         default:
             return nil
         }
@@ -98,5 +94,4 @@ extension NSToolbarItem.Identifier {
     static let viewList = NSToolbarItem.Identifier("CommanderToolbarViewList")
     static let viewGrid = NSToolbarItem.Identifier("CommanderToolbarViewGrid")
     static let info = NSToolbarItem.Identifier("CommanderToolbarInfo")
-    static let newTab = NSToolbarItem.Identifier("CommanderToolbarNewTab")
 }
