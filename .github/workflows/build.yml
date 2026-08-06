@@ -20,8 +20,8 @@ jobs:
       - name: Test
         run: swift test -c release
 
-  publish-release:
-    name: Build & Publish Release Artifacts
+  build-release-artifacts:
+    name: Build release artifacts
     needs: checks
     if: github.event_name == 'release'
     runs-on: macos-latest
@@ -44,13 +44,43 @@ jobs:
         run: ./scripts/create_pkg.sh "${{ github.event.release.tag_name }}" build
       - name: Create DMG
         run: ./scripts/create_dmg.sh "${{ github.event.release.tag_name }}" build
-      - name: Upload DMG as workflow artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v6
         with:
-          name: Commander-${{ github.event.release.tag_name }}.dmg
+          name: Commander-dmg-${{ github.sha }}
           path: build/Commander-${{ github.event.release.tag_name }}.dmg
-      - name: Upload PKG as workflow artifact
-        uses: actions/upload-artifact@v4
+          if-no-files-found: error
+      - name: Upload PKG artifact
+        uses: actions/upload-artifact@v6
         with:
-          name: Commander-${{ github.event.release.tag_name }}.pkg
+          name: Commander-pkg-${{ github.sha }}
           path: build/Commander-${{ github.event.release.tag_name }}.pkg
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release and attach artifacts
+    needs: build-release-artifacts
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download DMG artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Commander-dmg-${{ github.sha }}
+          path: release
+      - name: Download PKG artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Commander-pkg-${{ github.sha }}
+          path: release
+      - name: Create release (attach artifacts)
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/Commander-${{ github.event.release.tag_name }}.dmg
+            release/Commander-${{ github.event.release.tag_name }}.pkg
+          name: Commander ${{ github.event.release.tag_name }}
+          draft: false
+          prerelease: false
