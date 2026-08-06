@@ -1004,10 +1004,13 @@ private final class BrowserPaneViewController: NSViewController {
   }
 
   private func playSuccessSound() {
-    if let sound = NSSound(named: NSSound.Name("Sosumi")) {
+    // Prefer the 'Pop' sound for successful file moves/copies (more like Finder)
+    if let sound = NSSound(named: NSSound.Name("Pop")) {
+      sound.play()
+    } else if let sound = NSSound(named: NSSound.Name("Funk")) {
       sound.play()
     } else {
-      NSSound.beep()
+      // As a last resort, do nothing instead of playing the error beep
     }
   }
 

@@ -15,7 +15,11 @@ let package = Package(
   targets: [
     .executableTarget(
       name: "Commander",
-      path: "Sources/Commander"
+      path: ".",
+      sources: ["Sources/Commander"],
+      resources: [
+        .process("Assets")
+      ]
     )
   ]
 )
