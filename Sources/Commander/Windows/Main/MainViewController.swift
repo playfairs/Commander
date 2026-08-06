@@ -1,6 +1,11 @@
 import AppKit
 import Quartz
 
+private func isDirectory(_ url: URL) -> Bool {
+  var isDirectory: ObjCBool = false
+  return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
+}
+
 private final class BrowserTableView: NSTableView {
   weak var browserPane: BrowserPaneViewController?
 
@@ -247,7 +252,7 @@ final class MainViewController: NSViewController {
   private func goToPath(pathText: String) {
     let expanded = NSString(string: pathText).expandingTildeInPath
     let url = URL(fileURLWithPath: expanded)
-    guard FileManager.default.fileExists(atPath: url.path), url.hasDirectoryPath else {
+    guard isDirectory(url) else {
       showAlert(title: "Invalid Path", message: "\(pathText) is not a valid directory.")
       return
     }
@@ -654,7 +659,7 @@ private final class BrowserPaneViewController: NSViewController {
   }
 
   fileprivate func loadDirectory(_ url: URL, replaceHistory: Bool) {
-    guard url.hasDirectoryPath else { return }
+    guard isDirectory(url) else { return }
     do {
       let options: FileManager.DirectoryEnumerationOptions =
         showHiddenFiles ? [] : [.skipsHiddenFiles]
@@ -688,6 +693,11 @@ private final class BrowserPaneViewController: NSViewController {
 
   fileprivate func reloadCurrentDirectory() {
     loadDirectory(currentURL, replaceHistory: true)
+  }
+
+  private func isDirectory(_ url: URL) -> Bool {
+    var isDirectory: ObjCBool = false
+    return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
   }
 
   @objc fileprivate func goBack() {
