@@ -29,8 +29,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Fetch tags
         run: git fetch --prune --unshallow || true
-      - name: Run checks
-        run: just checks
+      - name: Run checks (without just)
+        run: |
+          swift --version
+          swift package resolve
+          swift build -c release
+          swift test -c release
+      - name: Make scripts executable
+        run: |
+          chmod +x ./scripts/*.sh || true
       - name: Build app bundle
         run: ./scripts/build_app.sh "${{ github.event.release.tag_name }}" build
       - name: Create PKG
