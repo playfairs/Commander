@@ -1,0 +1,53 @@
+name: CI / Build
+
+on:
+  push: {}
+  release:
+    types: [ published ]
+
+jobs:
+  checks:
+    name: Checks
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Swift version
+        run: swift --version
+      - name: Resolve packages
+        run: swift package resolve
+      - name: Build
+        run: swift build -c release
+      - name: Test
+        run: swift test -c release
+
+  publish-release:
+    name: Build & Publish Release Artifacts
+    needs: checks
+    if: github.event_name == 'release'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch tags
+        run: git fetch --prune --unshallow || true
+      - name: Run checks
+        run: just checks
+      - name: Build app bundle
+        run: ./scripts/build_app.sh "${{ github.event.release.tag_name }}" build
+      - name: Create PKG
+        run: ./scripts/create_pkg.sh "${{ github.event.release.tag_name }}" build
+      - name: Create DMG
+        run: ./scripts/create_dmg.sh "${{ github.event.release.tag_name }}" build
+      - name: Upload DMG
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: build/Commander-${{ github.event.release.tag_name }}.dmg
+          asset_name: Commander-${{ github.event.release.tag_name }}.dmg
+          asset_content_type: application/x-apple-diskimage
+      - name: Upload PKG
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: build/Commander-${{ github.event.release.tag_name }}.pkg
+          asset_name: Commander-${{ github.event.release.tag_name }}.pkg
+          asset_content_type: application/octet-stream
