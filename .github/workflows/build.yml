@@ -1,44 +1,37 @@
-name: Build macOS Release
+name: Build (Release)
 
-on:
-  release:
-    types:
-      - published
-
-permissions:
-  contents: write
+on: [push, pull_request]
 
 jobs:
-  build:
-    runs-on: macos-latest
+  build-macos:
+    runs-on: macos-26
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+          fetch-depth: 0
 
       - name: Set up permissions for scripts
         run: |
           chmod +x tools/*.sh || true
 
-      - name: Build app bundle
+      - name: Build and package
         run: |
           ./tools/make_app_bundle.sh
-
-      - name: Create DMG and PKG
-        run: |
           ./tools/make_dmg_and_pkg.sh
 
-      - name: Upload DMG
-        uses: actions/upload-release-asset@v1
-        with:
-          release_id: ${{ github.event.release.id }}
-          asset_path: dist/Commander-${{ github.event.release.tag_name }}.dmg
-          asset_name: Commander-${{ github.event.release.tag_name }}.dmg
-          asset_content_type: application/x-apple-diskimage
+      - name: Remove quarantine from artifacts
+        run: |
+          xattr -rd com.apple.quarantine dist/* 2>/dev/null || true
 
-      - name: Upload PKG
-        uses: actions/upload-release-asset@v1
+      - uses: actions/upload-artifact@v6
         with:
-          release_id: ${{ github.event.release.id }}
-          asset_path: dist/packages/Commander-${{ github.event.release.tag_name }}.pkg
-          asset_name: Commander-${{ github.event.release.tag_name }}.pkg
-          asset_content_type: application/octet-stream
+          name: commander-release-macos-dmg-${{ github.sha }}
+          path: dist/Commander-${{ github.sha }}.dmg
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: commander-release-macos-pkg-${{ github.sha }}
+          path: dist/packages/Commander-${{ github.sha }}.pkg
+          if-no-files-found: error
