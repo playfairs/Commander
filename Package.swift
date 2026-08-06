@@ -2,20 +2,20 @@
 import PackageDescription
 
 let package = Package(
-    name: "Commander",
-    platforms: [
-        .macOS(.v14)
-    ],
-    products: [
-        .executable(
-            name: "Commander",
-            targets: ["Commander"]
-        )
-    ],
-    targets: [
-        .executableTarget(
-            name: "Commander",
-            path: "Sources/Commander"
-        )
-    ]
+  name: "Commander",
+  platforms: [
+    .macOS(.v14)
+  ],
+  products: [
+    .executable(
+      name: "Commander",
+      targets: ["Commander"]
+    )
+  ],
+  targets: [
+    .executableTarget(
+      name: "Commander",
+      path: "Sources/Commander"
+    )
+  ]
 )
