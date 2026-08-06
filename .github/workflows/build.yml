@@ -1,49 +1,46 @@
-name: Build (Release)
+name: CI
 
 on:
   push:
-    tags:
-      - 'v*'
-  release:
-    types: [published]
-
-permissions:
-  contents: write
+    branches: [main, master]
+  pull_request:
 
 jobs:
-  build-macos:
-    runs-on: macos-26
+  build:
+    name: Build, Test, and Package
+    runs-on: macos-14
+
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout repository
+        uses: actions/checkout@v6
         with:
-          submodules: true
           fetch-depth: 0
 
-      - name: Set up permissions for scripts
-        run: |
-          chmod +x tools/*.sh || true
+      - name: Show Swift version
+        run: swift --version
 
-      - name: Build and package
-        run: |
-          ./tools/make_app_bundle.sh
-          ./tools/make_dmg_and_pkg.sh
+      - name: Build release executable
+        run: swift build -c release
 
-      - name: Remove quarantine from artifacts
-        run: |
-          xattr -rd com.apple.quarantine dist/* 2>/dev/null || true
+      - name: Run tests
+        run: swift test --enable-test-discovery
 
-      - name: List generated packages
-        run: |
-          echo "Generated files in dist:"
-          find dist -maxdepth 2 -type f | sort
+      - name: Create app bundle
+        run: bash ./tools/make_app_bundle.sh
 
-      - name: Upload DMG and PKG to release
-        uses: softprops/action-gh-release@v2
+      - name: Create DMG and PKG
+        run: bash ./tools/make_dmg_and_pkg.sh
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          body: Automated build for ${{ github.ref_name }}
-          files: |
-            dist/Commander-*.dmg
-            dist/packages/Commander.pkg
-          fail_on_unmatched_files: false
+          name: commander-dmg-${{ github.sha }}
+          path: dist/Commander-*.dmg
+          if-no-files-found: error
+
+      - name: Upload PKG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: commander-pkg-${{ github.sha }}
+          path: dist/packages/Commander.pkg
+          if-no-files-found: error

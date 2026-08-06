@@ -31,7 +31,13 @@ chmod +x "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 if [ -d "$PWD_DIR/Assets" ]; then
   cp -R "$PWD_DIR/Assets" "$APP_BUNDLE/Contents/Resources/Assets"
 fi
-
+RESOURCE_BUNDLE=$(find "$PWD_DIR/.build" -maxdepth 5 -type d -name "${APP_NAME}_${APP_NAME}.bundle" | head -n1 || true)
+if [ -n "$RESOURCE_BUNDLE" ] && [ -d "$RESOURCE_BUNDLE" ]; then
+  echo "Copying SwiftPM resource bundle from $RESOURCE_BUNDLE"
+  cp -R "$RESOURCE_BUNDLE" "$APP_BUNDLE/Contents/Resources/"
+else
+  echo "Warning: SwiftPM resource bundle not found"
+fi
 if [ -d "$ICON_DIR" ]; then
   ICNS_FILE=$(find "$ICON_DIR" -maxdepth 1 -type f -name "*.icns" | head -n1 || true)
   if [ -n "$ICNS_FILE" ]; then
