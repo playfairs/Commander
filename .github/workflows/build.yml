@@ -1,6 +1,7 @@
 name: Build (Release)
 
 on:
+  push:
   release:
     types: [published]
 
@@ -30,6 +31,7 @@ jobs:
           xattr -rd com.apple.quarantine dist/* 2>/dev/null || true
 
       - name: Upload DMG and PKG to release
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           files: |

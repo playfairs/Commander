@@ -1005,6 +1005,8 @@ private final class BrowserPaneViewController: NSViewController {
 
   private func playSuccessSound() {
     // Prefer the 'Pop' sound for successful file moves/copies (more like Finder)
+    // I will prob just drop using this bc it seems too much like Finder if I do this
+    // which basically defeats the purpose of using a different app..
     if let sound = NSSound(named: NSSound.Name("Pop")) {
       sound.play()
     } else if let sound = NSSound(named: NSSound.Name("Funk")) {
