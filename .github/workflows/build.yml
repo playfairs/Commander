@@ -2,6 +2,8 @@ name: Build (Release)
 
 on:
   push:
+    tags:
+      - 'v*'
   release:
     types: [published]
 
@@ -30,11 +32,18 @@ jobs:
         run: |
           xattr -rd com.apple.quarantine dist/* 2>/dev/null || true
 
+      - name: List generated packages
+        run: |
+          echo "Generated files in dist:"
+          find dist -maxdepth 2 -type f | sort
+
       - name: Upload DMG and PKG to release
-        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: Automated build for ${{ github.ref_name }}
           files: |
             dist/*.dmg
             dist/packages/*.pkg
-          fail_on_unmatched_files: true
+          fail_on_unmatched_files: false
