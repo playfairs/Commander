@@ -1,6 +1,11 @@
 name: Build (Release)
 
-on: [push, pull_request]
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
 
 jobs:
   build-macos:
@@ -20,30 +25,14 @@ jobs:
           ./tools/make_app_bundle.sh
           ./tools/make_dmg_and_pkg.sh
 
-      - name: Package app bundle
-        run: |
-          if [ -d dist/Commander.app ]; then
-            tar -czf dist/Commander.app.tar.gz -C dist Commander.app
-          fi
-
       - name: Remove quarantine from artifacts
         run: |
           xattr -rd com.apple.quarantine dist/* 2>/dev/null || true
 
-      - uses: actions/upload-artifact@v6
+      - name: Upload DMG and PKG to release
+        uses: softprops/action-gh-release@v2
         with:
-          name: commander-release-macos-app-${{ github.sha }}
-          path: dist/Commander.app.tar.gz
-          if-no-files-found: error
-
-      - uses: actions/upload-artifact@v6
-        with:
-          name: commander-release-macos-dmg-${{ github.sha }}
-          path: dist/*.dmg
-          if-no-files-found: error
-
-      - uses: actions/upload-artifact@v6
-        with:
-          name: commander-release-macos-pkg-${{ github.sha }}
-          path: dist/packages/*.pkg
-          if-no-files-found: error
+          files: |
+            dist/*.dmg
+            dist/packages/*.pkg
+          fail_on_unmatched_files: true
