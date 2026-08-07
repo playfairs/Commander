@@ -1242,16 +1242,8 @@ private final class BrowserPaneViewController: NSViewController {
   }
 
   private func playSuccessSound() {
-    // Prefer the 'Pop' sound for successful file moves/copies (more like Finder)
-    // I will prob just drop using this bc it seems too much like Finder if I do this
-    // which basically defeats the purpose of using a different app..
-    if let sound = NSSound(named: NSSound.Name("Pop")) {
-      sound.play()
-    } else if let sound = NSSound(named: NSSound.Name("Funk")) {
-      sound.play()
-    } else {
-      // As a last resort, do nothing instead of playing the error beep
-    }
+      /// If `Crystal` doesn't exist theres something wrong with your Mac, so this is fine.
+      NSSound(named: NSSound.Name("Crystal")).unsafelyUnwrapped.play()
   }
 
   private func reloadSiblingPanesAfterMove(from sourceFolders: [URL]) {
