@@ -6,7 +6,8 @@ import AppKit
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.mainMenu = buildMainMenu()
 
-    let controller = MainWindowController()
+    let session = SessionManager.currentSession()
+    let controller = MainWindowController(session: session)
     controller.showWindow(nil)
     windowController = controller
     func tryLoadIcns(named name: String) -> NSImage? {
@@ -129,12 +130,6 @@ import AppKit
     let goFolderItem = fileMenu.addItem(
       withTitle: "Go to Folder…", action: #selector(goToPathAction(_:)), keyEquivalent: "g")
     goFolderItem.target = self
-    let quickSearchItem = fileMenu.addItem(
-      withTitle: "Quick Search…", action: #selector(quickSearchAction(_:)), keyEquivalent: "s")
-    quickSearchItem.target = self
-    let fullSearchItem = fileMenu.addItem(
-      withTitle: "Full Search…", action: #selector(fullSearchAction(_:)), keyEquivalent: "S")
-    fullSearchItem.target = self
     mainMenu.addItem(fileMenuItem)
 
     let viewMenuItem = NSMenuItem()
@@ -146,21 +141,10 @@ import AppKit
     hiddenItem.keyEquivalentModifierMask = [.command, .shift]
     hiddenItem.target = self
 
-    let paletteItem = viewMenu.addItem(
-      withTitle: "Command Palette…", action: #selector(showCommandPaletteAction(_:)),
-      keyEquivalent: "P")
-    paletteItem.keyEquivalentModifierMask = [.command, .shift]
-    paletteItem.target = self
-
     let goToItem = viewMenu.addItem(
       withTitle: "Go to Folder…", action: #selector(goToPathAction(_:)), keyEquivalent: "G")
     goToItem.keyEquivalentModifierMask = [.command, .shift]
     goToItem.target = self
-
-    let fullSearchViewItem = viewMenu.addItem(
-      withTitle: "Full Search…", action: #selector(fullSearchAction(_:)), keyEquivalent: "S")
-    fullSearchViewItem.keyEquivalentModifierMask = [.command, .shift]
-    fullSearchViewItem.target = self
 
     mainMenu.addItem(viewMenuItem)
 
@@ -173,20 +157,8 @@ extension AppDelegate {
     rootViewController?.goToPath(nil)
   }
 
-  @objc fileprivate func quickSearchAction(_ sender: Any?) {
-    rootViewController?.quickSearch(nil)
-  }
-
-  @objc fileprivate func fullSearchAction(_ sender: Any?) {
-    rootViewController?.fullSearch(nil)
-  }
-
   @objc fileprivate func toggleHiddenFilesAction(_ sender: Any?) {
-    rootViewController?.toggleHiddenFiles(nil)
-  }
-
-  @objc fileprivate func showCommandPaletteAction(_ sender: Any?) {
-    rootViewController?.showCommandPalette()
+    rootViewController?.toggleHiddenFiles(sender)
   }
 
   fileprivate var rootViewController: MainViewController? {

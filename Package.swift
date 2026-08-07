@@ -25,6 +25,7 @@ let package = Package(
         "LICENSE",
         "docs",
         "Tests",
+        "femboys.txt",
       ],
       sources: ["Sources/Commander"],
       resources: [

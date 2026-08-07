@@ -1,8 +1,8 @@
 import AppKit
 
 final class MainWindowController: NSWindowController {
-  init() {
-    let window = MainWindow()
+  init(session: Session) {
+    let window = MainWindow(session: session)
     super.init(window: window)
     window.title = "Commander"
     window.center()

@@ -1,5 +1,6 @@
 import AppKit
 import Quartz
+import UniformTypeIdentifiers
 
 private func isDirectory(_ url: URL) -> Bool {
   var isDirectory: ObjCBool = false
@@ -58,20 +59,27 @@ private final class BrowserQuickLookDataSource: NSObject, QLPreviewPanelDataSour
   func browserPane(_ pane: BrowserPaneViewController, didUpdateStatus status: String)
 }
 
-final class MainViewController: NSViewController {
+final class MainViewController: NSViewController, NSTextFieldDelegate {
   private let splitController = NSSplitViewController()
   private let statusBar = NSTextField(labelWithString: "")
   private let statusSeparator = NSBox()
   private let statusContainer = NSView()
+  private var folderSizeGenerationID = UUID()
 
+  private let session: Session
   private var showHiddenFiles = false
   private weak var activePane: BrowserPaneViewController?
   private var popupOverlay: NSView?
   private var popupTextField: NSTextField?
   private var popupCompletion: ((String) -> Void)?
 
-  init() {
+  init(session: Session) {
+    self.session = session
     super.init(nibName: nil, bundle: nil)
+  }
+
+  convenience init() {
+    self.init(session: Session(rootURL: FileManager.default.homeDirectoryForCurrentUser))
   }
 
   @available(*, unavailable)
@@ -94,7 +102,7 @@ final class MainViewController: NSViewController {
 
     let container = NSStackView(views: [splitController.view, statusSeparator, statusContainer])
     container.orientation = .vertical
-    container.alignment = .leading
+    container.alignment = .width
     container.distribution = .fill
     container.spacing = 0
     container.translatesAutoresizingMaskIntoConstraints = false
@@ -107,13 +115,16 @@ final class MainViewController: NSViewController {
       container.leadingAnchor.constraint(equalTo: view.leadingAnchor),
       container.trailingAnchor.constraint(equalTo: view.trailingAnchor),
       splitController.view.heightAnchor.constraint(greaterThanOrEqualToConstant: 320),
+      splitController.view.widthAnchor.constraint(equalTo: container.widthAnchor),
       statusContainer.heightAnchor.constraint(equalToConstant: 28),
       statusBar.leadingAnchor.constraint(equalTo: statusContainer.leadingAnchor, constant: 12),
       statusBar.trailingAnchor.constraint(equalTo: statusContainer.trailingAnchor, constant: -12),
       statusBar.centerYAnchor.constraint(equalTo: statusContainer.centerYAnchor),
       statusSeparator.heightAnchor.constraint(equalToConstant: 1),
-      splitController.view.widthAnchor.constraint(equalTo: container.widthAnchor),
     ])
+
+    splitController.view.setContentHuggingPriority(.defaultLow, for: .horizontal)
+    splitController.view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
     self.view = view
   }
@@ -197,55 +208,8 @@ final class MainViewController: NSViewController {
     updateStatusBar()
   }
 
-  func showCommandPalette() {
-    presentTextPopup(
-      title: "Command Palette",
-      subtitle: "Enter a command: toggle hidden, go /path, quick search, full search",
-      placeholder: "Type a command and press Enter",
-      acceptTitle: "Run"
-    ) { [weak self] command in
-      self?.runCommandPaletteCommand(command)
-    }
-  }
-
-  @objc private func commandPaletteEntered(_ sender: NSTextField) {
-    let command = sender.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-    runCommandPaletteCommand(command)
-  }
-
-  private func runCommandPaletteCommand(_ command: String) {
-    let lowercased = command.lowercased()
-    if lowercased == "toggle hidden" || lowercased == "toggle hidden files" {
-      toggleHiddenFiles()
-      return
-    }
-
-    if lowercased.hasPrefix("go ") {
-      let pathText = String(command.dropFirst(3)).trimmingCharacters(in: .whitespaces)
-      goToPath(pathText: pathText)
-      return
-    }
-
-    if lowercased.hasPrefix("quick search") {
-      let query = String(command.dropFirst(12)).trimmingCharacters(in: .whitespaces)
-      quickSearch(query: query.isEmpty ? nil : query)
-      return
-    }
-
-    if lowercased.hasPrefix("full search") {
-      let query = String(command.dropFirst(11)).trimmingCharacters(in: .whitespaces)
-      fullSearch(query: query.isEmpty ? nil : query)
-      return
-    }
-
-    showAlert(title: "Unknown Command", message: "\(command) is not recognized.")
-  }
-
   @objc func goToPath(_ sender: Any?) {
-    let prompt = "Paste a path to navigate to"
-    presentTextPopup(
-      title: "Go to Folder", subtitle: prompt, placeholder: "/path/to/folder", acceptTitle: "Open"
-    ) { [weak self] path in
+    presentFinderGoToFolderPopup { [weak self] path in
       self?.goToPath(pathText: path)
     }
   }
@@ -271,46 +235,18 @@ final class MainViewController: NSViewController {
     updateStatusBar()
   }
 
-  @objc func quickSearch(_ sender: Any?) {
-    promptForText(
-      title: "Quick Search", message: "Search the current folder and its parents.",
-      placeholder: "Search term"
-    ) { [weak self] query in
-      self?.quickSearch(query: query)
-    }
-  }
-
-  func quickSearch(query: String?) {
-    guard let query = query, !query.isEmpty else {
-      showAlert(title: "Search Required", message: "Enter a query to search.")
-      return
-    }
-    activePane?.search(query: query, fullSearch: false)
-  }
-
-  @objc func fullSearch(_ sender: Any?) {
-    promptForText(
-      title: "Full Search", message: "Search all mounted volumes and your home folder.",
-      placeholder: "Search term"
-    ) { [weak self] query in
-      self?.fullSearch(query: query)
-    }
-  }
-
-  func fullSearch(query: String?) {
-    guard let query = query, !query.isEmpty else {
-      showAlert(title: "Search Required", message: "Enter a query to search.")
-      return
-    }
-    activePane?.search(query: query, fullSearch: true)
-  }
 
   func updateStatusBar() {
     guard let pane = activePane else {
       statusBar.stringValue = "Ready"
       return
     }
-    statusBar.stringValue = pane.statusText
+    let baseText = pane.statusText
+    if let label = session.label {
+      statusBar.stringValue = "Session: \(label) — \(baseText)"
+    } else {
+      statusBar.stringValue = baseText
+    }
   }
 
   private func promptForText(
@@ -412,6 +348,36 @@ final class MainViewController: NSViewController {
     popupCompletion = completion
 
     view.window?.makeFirstResponder(textField)
+  }
+
+  private func presentFinderGoToFolderPopup(completion: @escaping (String) -> Void) {
+    let alert = NSAlert()
+    alert.messageText = "Go to Folder"
+    alert.informativeText = "Enter the path of the folder you want to open."
+    alert.alertStyle = .informational
+    alert.addButton(withTitle: "Go")
+    alert.addButton(withTitle: "Cancel")
+
+    let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 360, height: 24))
+    textField.placeholderString = ""
+    textField.font = .systemFont(ofSize: 13)
+    textField.bezelStyle = .roundedBezel
+    textField.focusRingType = .default
+    alert.accessoryView = textField
+
+    if let window = view.window {
+      alert.beginSheetModal(for: window) { response in
+        if response == .alertFirstButtonReturn {
+          completion(textField.stringValue)
+        }
+      }
+      window.makeFirstResponder(textField)
+    } else {
+      let response = alert.runModal()
+      if response == .alertFirstButtonReturn {
+        completion(textField.stringValue)
+      }
+    }
   }
 
   private func presentMessagePopup(title: String, message: String) {
@@ -520,6 +486,11 @@ private final class BrowserPaneViewController: NSViewController {
   private var historyIndex: Int = 0
   private var items: [DirectoryItem] = []
   private let quickLookDataSource = BrowserQuickLookDataSource()
+  private var statusMessage: String? {
+    didSet { delegate?.browserPane(self, didUpdateStatus: statusText) }
+  }
+  private var progressTimer: DispatchSourceTimer?
+  private var folderSizeGenerationID = UUID()
 
   var showHiddenFiles = false
 
@@ -560,7 +531,17 @@ private final class BrowserPaneViewController: NSViewController {
     configurePathControl()
     setupTableView()
 
-    let navigationRow = NSStackView(views: [backButton, forwardButton, upButton, pathControl])
+    let actionButtons = NSStackView(views: [
+      addActionButton(title: "New Folder", symbolName: "folder.badge.plus", action: #selector(createNewFolder)),
+      addActionButton(title: "Duplicate", symbolName: "doc.on.doc", action: #selector(duplicateSelectedItem)),
+      addActionButton(title: "Open in Terminal", symbolName: "terminal", action: #selector(openInTerminal)),
+    ])
+    actionButtons.orientation = .horizontal
+    actionButtons.alignment = .centerY
+    actionButtons.spacing = 6
+    actionButtons.translatesAutoresizingMaskIntoConstraints = false
+
+    let navigationRow = NSStackView(views: [backButton, forwardButton, upButton, pathControl, actionButtons])
     navigationRow.orientation = .horizontal
     navigationRow.alignment = .centerY
     navigationRow.spacing = 8
@@ -569,6 +550,7 @@ private final class BrowserPaneViewController: NSViewController {
 
     let container = NSStackView(views: [navigationRow, scrollView])
     container.orientation = .vertical
+    container.alignment = .width
     container.spacing = 0
     container.translatesAutoresizingMaskIntoConstraints = false
 
@@ -606,6 +588,17 @@ private final class BrowserPaneViewController: NSViewController {
     upButton.action = #selector(goUp)
   }
 
+  private func addActionButton(title: String, symbolName: String, action: Selector) -> NSButton {
+    let button = NSButton(title: title, target: self, action: action)
+    button.bezelStyle = .rounded
+    button.controlSize = .small
+    button.font = .systemFont(ofSize: 11)
+    button.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: title)
+    button.imagePosition = .imageLeading
+    button.translatesAutoresizingMaskIntoConstraints = false
+    return button
+  }
+
   private func configurePathControl() {
     pathControl.controlSize = .small
     pathControl.url = currentURL
@@ -619,24 +612,30 @@ private final class BrowserPaneViewController: NSViewController {
     let nameColumn = NSTableColumn(identifier: .name)
     nameColumn.title = "Name"
     nameColumn.width = 300
+    nameColumn.sortDescriptorPrototype = NSSortDescriptor(key: "name", ascending: true)
 
     let kindColumn = NSTableColumn(identifier: .kind)
     kindColumn.title = "Kind"
-    kindColumn.width = 110
+    kindColumn.width = 140
+    kindColumn.sortDescriptorPrototype = NSSortDescriptor(key: "kind", ascending: true)
 
     let sizeColumn = NSTableColumn(identifier: .size)
     sizeColumn.title = "Size"
-    sizeColumn.width = 90
+    sizeColumn.width = 100
+    sizeColumn.sortDescriptorPrototype = NSSortDescriptor(key: "sizeValue", ascending: true)
 
     let modifiedColumn = NSTableColumn(identifier: .modified)
     modifiedColumn.title = "Modified"
-    modifiedColumn.width = 150
+    modifiedColumn.width = 160
+    modifiedColumn.sortDescriptorPrototype = NSSortDescriptor(key: "modifiedDate", ascending: true)
 
     tableView.addTableColumn(nameColumn)
     tableView.addTableColumn(kindColumn)
     tableView.addTableColumn(sizeColumn)
     tableView.addTableColumn(modifiedColumn)
     tableView.headerView = NSTableHeaderView()
+    tableView.allowsColumnReordering = false
+    tableView.allowsColumnResizing = true
     tableView.usesAlternatingRowBackgroundColors = true
     tableView.rowHeight = 28
     tableView.selectionHighlightStyle = .regular
@@ -670,14 +669,19 @@ private final class BrowserPaneViewController: NSViewController {
           .isDirectoryKey, .contentTypeKey, .fileSizeKey, .contentModificationDateKey,
         ], options: options)
       let filtered = rawItems.filter { showHiddenFiles || !$0.lastPathComponent.hasPrefix(".") }
-      let directoryItems = filtered.map { DirectoryItem(url: $0) }.sorted()
+      let directoryItems = filtered.map { DirectoryItem(url: $0) }
       items = directoryItems
+      sortItems()
 
       if let parentURL = parentURL(for: url) {
         items.insert(DirectoryItem.parentItem(for: parentURL), at: 0)
       }
 
       currentURL = url
+      let generationID = UUID()
+      folderSizeGenerationID = generationID
+      loadFolderSizesIfNeeded(using: generationID)
+
       if replaceHistory {
         history = [url]
         historyIndex = 0
@@ -744,8 +748,35 @@ private final class BrowserPaneViewController: NSViewController {
   }
 
   fileprivate var statusText: String {
+    if let statusMessage { return statusMessage }
     let name = currentURL.lastPathComponent.isEmpty ? currentURL.path : currentURL.lastPathComponent
     return "\(items.count) items — \(name)"
+  }
+
+  private func startProgressStatus(_ baseMessage: String) {
+    stopProgressStatus()
+    DispatchQueue.main.async { [weak self] in
+      self?.statusMessage = baseMessage
+    }
+
+    let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.main)
+    var dotCount = 0
+    timer.schedule(deadline: .now() + 0.5, repeating: 0.5)
+    timer.setEventHandler { [weak self] in
+      guard let self = self else { return }
+      dotCount = (dotCount + 1) % 4
+      self.statusMessage = baseMessage + String(repeating: ".", count: dotCount)
+    }
+    timer.resume()
+    progressTimer = timer
+  }
+
+  private func stopProgressStatus() {
+    progressTimer?.cancel()
+    progressTimer = nil
+    DispatchQueue.main.async { [weak self] in
+      self?.statusMessage = nil
+    }
   }
 
   @objc fileprivate func showSelectedInfo() {
@@ -754,23 +785,29 @@ private final class BrowserPaneViewController: NSViewController {
   }
 
   private func showFinderInfo(for url: URL) {
-    let escapedPath = url.path.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(
-      of: "\"", with: "\\\"")
-    let script = """
-      tell application "Finder"
-          activate
-          set theItem to POSIX file "\(escapedPath)" as alias
-          open information window of theItem
-      end tell
-      """
+    let metadataString = Metadata.formattedMetadata(for: url)
 
-    if let appleScript = NSAppleScript(source: script) {
-      var errorInfo: NSDictionary?
-      appleScript.executeAndReturnError(&errorInfo)
-      if let errorInfo {
-        NSLog("Failed to open Finder info: %@", errorInfo)
-      }
-    }
+    let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 520, height: 320))
+    textView.isEditable = false
+    textView.isSelectable = true
+    textView.string = metadataString
+    textView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+    textView.backgroundColor = .textBackgroundColor
+
+    let scrollView = NSScrollView(frame: textView.frame)
+    scrollView.documentView = textView
+    scrollView.hasVerticalScroller = true
+    scrollView.hasHorizontalScroller = false
+    scrollView.autohidesScrollers = true
+    scrollView.borderType = .bezelBorder
+
+    let alert = NSAlert()
+    alert.messageText = "Metadata for \(url.lastPathComponent)"
+    alert.informativeText = ""
+    alert.alertStyle = .informational
+    alert.accessoryView = scrollView
+    alert.addButton(withTitle: "OK")
+    alert.runModal()
   }
 
   fileprivate func search(query: String, fullSearch: Bool) {
@@ -866,6 +903,59 @@ private final class BrowserPaneViewController: NSViewController {
 
   fileprivate func goUpDirectory() {
     goUp()
+  }
+
+  @objc fileprivate func createNewFolder() {
+    let alert = NSAlert()
+    alert.messageText = "Create Folder"
+    alert.informativeText = "Choose a name for the new folder."
+    alert.alertStyle = .informational
+    alert.addButton(withTitle: "Create")
+    alert.addButton(withTitle: "Cancel")
+
+    let textField = NSTextField(string: "New Folder")
+    textField.frame = NSRect(x: 0, y: 0, width: 320, height: 24)
+    alert.accessoryView = textField
+    alert.window.initialFirstResponder = textField
+
+    if alert.runModal() == .alertFirstButtonReturn {
+      let name = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+      do {
+        let folderURL = try FileSystemOperations.createFolder(named: name, in: currentURL)
+        loadDirectory(currentURL, replaceHistory: false)
+        if let window = view.window {
+          NSWorkspace.shared.selectFile(folderURL.path, inFileViewerRootedAtPath: currentURL.path)
+          window.makeFirstResponder(tableView)
+        }
+      } catch {
+        presentErrorAlert("Unable to create folder.", error: error)
+      }
+    }
+  }
+
+  @objc fileprivate func duplicateSelectedItem() {
+    guard let item = selectedItem, !item.isParent else { return }
+    do {
+      let duplicatedURL = try FileSystemOperations.duplicateItem(at: item.url, in: currentURL)
+      loadDirectory(currentURL, replaceHistory: false)
+      NSWorkspace.shared.selectFile(duplicatedURL.path, inFileViewerRootedAtPath: currentURL.path)
+    } catch {
+      presentErrorAlert("Unable to duplicate item.", error: error)
+    }
+  }
+
+  @objc fileprivate func openInTerminal() {
+    let targetURL = selectedItem?.url ?? currentURL
+    let escapedPath = targetURL.path.replacingOccurrences(of: "\\", with: "\\\\")
+      .replacingOccurrences(of: "\"", with: "\\\"")
+    let script = "tell application \"Terminal\" to do script \"cd \\\"\(escapedPath)\\\"\""
+    if let appleScript = NSAppleScript(source: script) {
+      var errorInfo: NSDictionary?
+      appleScript.executeAndReturnError(&errorInfo)
+      if errorInfo != nil {
+        presentErrorAlert("Unable to open Terminal at the selected location.", error: nil)
+      }
+    }
   }
 
   @objc fileprivate func performTrashAction() {
@@ -1015,6 +1105,131 @@ private final class BrowserPaneViewController: NSViewController {
     return destination
   }
 
+  @objc fileprivate func compressSelectedItem() {
+    guard let item = selectedItem, !item.isParent else { return }
+    let sourceURL = item.url
+    let parentURL = sourceURL.deletingLastPathComponent()
+    let archiveName = sourceURL.lastPathComponent + ".zip"
+    let destinationURL = uniqueDestinationURL(for: parentURL.appendingPathComponent(archiveName))
+    let baseStatus = "Compressing \(item.name)"
+
+    startProgressStatus(baseStatus)
+    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+      guard let self = self else { return }
+      let process = Process()
+      process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
+      process.currentDirectoryURL = parentURL
+      process.arguments = item.isDirectory
+        ? ["-r", destinationURL.path, sourceURL.lastPathComponent]
+        : [destinationURL.path, sourceURL.lastPathComponent]
+
+      let outputPipe = Pipe()
+      process.standardOutput = outputPipe
+      let errorPipe = Pipe()
+      process.standardError = errorPipe
+      outputPipe.fileHandleForReading.readabilityHandler = { handle in
+        let data = handle.availableData
+        guard let line = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !line.isEmpty
+        else { return }
+        DispatchQueue.main.async { [weak self] in
+          self?.statusMessage = "Compressing \(item.name): \(line)"
+        }
+      }
+
+      var commandError: Error?
+      var commandMessage: String?
+      do {
+        try process.run()
+        process.waitUntilExit()
+        outputPipe.fileHandleForReading.readabilityHandler = nil
+        if process.terminationStatus != 0 {
+          let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+          commandMessage = String(data: errorData, encoding: .utf8) ?? "Unable to compress item."
+        }
+      } catch {
+        commandError = error
+      }
+
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self else { return }
+        self.stopProgressStatus()
+        if let error = commandError {
+          self.presentErrorAlert("Unable to compress item.", error: error)
+          return
+        }
+        if let message = commandMessage {
+          self.presentErrorAlert("Unable to compress item.", error: NSError(
+            domain: "Commander", code: 1, userInfo: [NSLocalizedDescriptionKey: message]))
+          return
+        }
+        self.reloadCurrentDirectory()
+      }
+    }
+  }
+
+  @objc fileprivate func gunzipSelectedItem() {
+    guard let item = selectedItem, !item.isParent,
+      item.url.pathExtension.lowercased() == "gz"
+    else {
+      return
+    }
+
+    let sourceURL = item.url
+    let outputURL = uniqueDestinationURL(for: sourceURL.deletingPathExtension())
+    let baseStatus = "Gunzipping \(item.name)"
+
+    startProgressStatus(baseStatus)
+    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+      guard let self = self else { return }
+      let process = Process()
+      process.executableURL = URL(fileURLWithPath: "/usr/bin/gzip")
+      process.arguments = ["-dc", sourceURL.path]
+
+      let outputPipe = Pipe()
+      process.standardOutput = outputPipe
+      let errorPipe = Pipe()
+      process.standardError = errorPipe
+
+      var commandError: Error?
+      var commandMessage: String?
+      do {
+        try process.run()
+        process.waitUntilExit()
+        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        if process.terminationStatus != 0 {
+          let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+          commandMessage = String(data: errorData, encoding: .utf8) ?? "Unable to gunzip item."
+        } else {
+          try data.write(to: outputURL)
+        }
+      } catch {
+        commandError = error
+      }
+
+      DispatchQueue.main.async { [weak self] in
+        guard let self = self else { return }
+        self.stopProgressStatus()
+        if let error = commandError {
+          self.presentErrorAlert("Unable to gunzip item.", error: error)
+          return
+        }
+        if let message = commandMessage {
+          self.presentErrorAlert("Unable to gunzip item.", error: NSError(
+            domain: "Commander", code: 1, userInfo: [NSLocalizedDescriptionKey: message]))
+          return
+        }
+        self.reloadCurrentDirectory()
+      }
+    }
+  }
+
+  @objc fileprivate func copySelectedItemPath() {
+    guard let item = selectedItem, !item.isParent else { return }
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(item.url.path, forType: .string)
+  }
+
   private func playSuccessSound() {
     // Prefer the 'Pop' sound for successful file moves/copies (more like Finder)
     // I will prob just drop using this bc it seems too much like Finder if I do this
@@ -1076,11 +1291,36 @@ private final class BrowserPaneViewController: NSViewController {
       title: "Rename", action: #selector(renameSelectedItem), keyEquivalent: "")
     renameItem.target = self
     menu.addItem(renameItem)
+    let duplicateItem = NSMenuItem(
+      title: "Duplicate", action: #selector(duplicateSelectedItem), keyEquivalent: "")
+    duplicateItem.target = self
+    menu.addItem(duplicateItem)
+    let compressItem = NSMenuItem(
+      title: "Compress", action: #selector(compressSelectedItem), keyEquivalent: "")
+    compressItem.target = self
+    menu.addItem(compressItem)
+    let gunzipItem = NSMenuItem(
+      title: "Gunzip", action: #selector(gunzipSelectedItem), keyEquivalent: "")
+    gunzipItem.target = self
+    gunzipItem.isEnabled = item.url.pathExtension.lowercased() == "gz"
+    menu.addItem(gunzipItem)
+    let newFolderItem = NSMenuItem(
+      title: "New Folder", action: #selector(createNewFolder), keyEquivalent: "")
+    newFolderItem.target = self
+    menu.addItem(newFolderItem)
+    let terminalItem = NSMenuItem(
+      title: "Open in Terminal", action: #selector(openInTerminal), keyEquivalent: "")
+    terminalItem.target = self
+    menu.addItem(terminalItem)
     menu.addItem(NSMenuItem.separator())
     let showInFinderItem = NSMenuItem(
       title: "Show in Finder", action: #selector(revealSelectedItemInFinder), keyEquivalent: "")
     showInFinderItem.target = self
     menu.addItem(showInFinderItem)
+    let copyPathItem = NSMenuItem(
+      title: "Copy Path", action: #selector(copySelectedItemPath), keyEquivalent: "")
+    copyPathItem.target = self
+    menu.addItem(copyPathItem)
     let trashItem = NSMenuItem(
       title: "Move to Trash", action: #selector(performTrashAction), keyEquivalent: "")
     trashItem.target = self
@@ -1096,6 +1336,64 @@ private final class BrowserPaneViewController: NSViewController {
     infoItem.target = self
     menu.addItem(infoItem)
     return menu
+  }
+
+  private func sortItems() {
+    guard !tableView.sortDescriptors.isEmpty else { return }
+    items.sort { lhs, rhs in
+      for descriptor in tableView.sortDescriptors {
+        let result = compare(lhs, rhs, by: descriptor)
+        if result != .orderedSame {
+          return descriptor.ascending ? result == .orderedAscending : result == .orderedDescending
+        }
+      }
+      return false
+    }
+  }
+
+  private func compare(_ lhs: DirectoryItem, _ rhs: DirectoryItem, by descriptor: NSSortDescriptor) -> ComparisonResult {
+    if lhs.isParent != rhs.isParent {
+      return lhs.isParent ? .orderedAscending : .orderedDescending
+    }
+
+    switch descriptor.key {
+    case "name":
+      return lhs.name.localizedCaseInsensitiveCompare(rhs.name)
+    case "kind":
+      return lhs.kind.localizedCaseInsensitiveCompare(rhs.kind)
+    case "sizeValue":
+      return compareOptionalInt(lhs.sizeValue, rhs.sizeValue)
+    case "modifiedDate":
+      return compareOptionalDate(lhs.modifiedDate, rhs.modifiedDate)
+    default:
+      return .orderedSame
+    }
+  }
+
+  private func compareOptionalInt(_ lhs: Int64?, _ rhs: Int64?) -> ComparisonResult {
+    switch (lhs, rhs) {
+    case let (l?, r?):
+      return l < r ? .orderedAscending : (l > r ? .orderedDescending : .orderedSame)
+    case (nil, nil):
+      return .orderedSame
+    case (nil, _):
+      return .orderedAscending
+    case (_, nil):
+      return .orderedDescending
+    }
+  }
+
+  private func compareOptionalDate(_ lhs: Date?, _ rhs: Date?) -> ComparisonResult {
+    switch (lhs, rhs) {
+    case let (l?, r?):
+      return l < r ? .orderedAscending : (l > r ? .orderedDescending : .orderedSame)
+    case (nil, nil):
+      return .orderedSame
+    case (nil, _):
+      return .orderedAscending
+    case (_, nil):
+      return .orderedDescending
+    }
   }
 
   private func renameItem(_ item: DirectoryItem) {
@@ -1219,8 +1517,38 @@ extension BrowserPaneViewController: NSTableViewDataSource, NSTableViewDelegate 
     return item.url as NSURL
   }
 
+  func tableView(_ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
+    sortItems()
+    tableView.reloadData()
+  }
+
   func tableViewSelectionDidChange(_ notification: Notification) {
     activatePane()
+  }
+
+  private func loadFolderSizesIfNeeded(using generationID: UUID) {
+    let currentGeneration = generationID
+    for (_, item) in items.enumerated() where item.isDirectory && !item.isParent {
+      let folderURL = item.url
+      DispatchQueue.global(qos: .utility).async { [weak self] in
+        guard let self = self else { return }
+        let folderSize = DirectoryItem.folderSizeValue(for: folderURL)
+        DispatchQueue.main.async {
+          guard self.folderSizeGenerationID == currentGeneration else { return }
+          guard let currentIndex = self.items.firstIndex(where: { $0.url == folderURL }) else { return }
+          self.items[currentIndex].sizeValue = folderSize
+          self.items[currentIndex].size = folderSize.map {
+            ByteCountFormatter.string(fromByteCount: $0, countStyle: .file)
+          } ?? "—"
+          if self.tableView.sortDescriptors.contains(where: { $0.key == "sizeValue" }) {
+            self.sortItems()
+            self.tableView.reloadData()
+          } else {
+            self.tableView.reloadData(forRowIndexes: IndexSet(integer: currentIndex), columnIndexes: IndexSet(integer: 2))
+          }
+        }
+      }
+    }
   }
 }
 
@@ -1231,8 +1559,10 @@ private struct DirectoryItem: Comparable {
   let isParent: Bool
   let isHidden: Bool
   let kind: String
-  let size: String
+  var size: String
+  var sizeValue: Int64?
   let modified: String
+  let modifiedDate: Date?
   let icon: NSImage?
 
   init(url: URL, isParent: Bool = false) {
@@ -1245,27 +1575,32 @@ private struct DirectoryItem: Comparable {
       self.kind = "Parent"
       self.size = "—"
       self.modified = "—"
+      self.sizeValue = nil
+      self.modifiedDate = nil
       self.icon = NSImage(systemSymbolName: "arrow.uturn.left", accessibilityDescription: "Parent")
       return
     }
 
-    let resourceValues = try? url.resourceValues(forKeys: [
+      let resourceValues = try? url.resourceValues(forKeys: [
       .isDirectoryKey, .contentTypeKey, .fileSizeKey, .contentModificationDateKey, .isHiddenKey,
     ])
     isDirectory = resourceValues?.isDirectory ?? false
     isHidden = resourceValues?.isHidden ?? url.lastPathComponent.hasPrefix(".")
-    kind =
-      isDirectory
-      ? "Folder"
-      : (url.pathExtension.uppercased().isEmpty ? "File" : url.pathExtension.uppercased())
+    kind = Self.kindLabel(for: url, resourceValues: resourceValues)
 
     if let fileSize = resourceValues?.fileSize, !isDirectory {
+      sizeValue = Int64(fileSize)
       size = ByteCountFormatter.string(fromByteCount: Int64(fileSize), countStyle: .file)
+    } else if isDirectory {
+      sizeValue = nil
+      size = "Calculating..."
     } else {
-      size = isDirectory ? "—" : "0 bytes"
+      sizeValue = nil
+      size = "0 bytes"
     }
 
-    if let modifiedDate = resourceValues?.contentModificationDate {
+    modifiedDate = resourceValues?.contentModificationDate
+    if let modifiedDate {
       let formatter = DateFormatter()
       formatter.dateStyle = .medium
       formatter.timeStyle = .short
@@ -1274,9 +1609,56 @@ private struct DirectoryItem: Comparable {
       modified = "—"
     }
 
-    let icon = NSWorkspace.shared.icon(forFile: url.path)
+      let icon = NSWorkspace.shared.icon(forFile: url.path)
     icon.size = NSSize(width: 16, height: 16)
     self.icon = icon
+  }
+
+  fileprivate static func folderSizeValue(for url: URL) -> Int64? {
+    guard let enumerator = FileManager.default.enumerator(
+      at: url,
+      includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
+      options: [.skipsHiddenFiles, .skipsPackageDescendants]
+    ) else {
+      return nil
+    }
+
+    var size: Int64 = 0
+    for case let fileURL as URL in enumerator {
+      let resourceValues = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+      if resourceValues?.isRegularFile == true, let fileSize = resourceValues?.fileSize {
+        size += Int64(fileSize)
+      }
+    }
+    return size
+  }
+
+  private static func kindLabel(for url: URL, resourceValues: URLResourceValues?) -> String {
+    if let isDirectory = resourceValues?.isDirectory, isDirectory {
+      return "Folder"
+    }
+
+    if let contentType = resourceValues?.contentType {
+      if let description = contentType.localizedDescription {
+        return description
+      }
+      return contentType.identifier
+    }
+
+    return url.pathExtension.isEmpty ? "File" : url.pathExtension.uppercased()
+  }
+
+  static func == (lhs: DirectoryItem, rhs: DirectoryItem) -> Bool {
+    return lhs.url == rhs.url
+      && lhs.name == rhs.name
+      && lhs.isDirectory == rhs.isDirectory
+      && lhs.isParent == rhs.isParent
+      && lhs.isHidden == rhs.isHidden
+      && lhs.kind == rhs.kind
+      && lhs.size == rhs.size
+      && lhs.sizeValue == rhs.sizeValue
+      && lhs.modified == rhs.modified
+      && lhs.modifiedDate == rhs.modifiedDate
   }
 
   static func parentItem(for url: URL) -> DirectoryItem {
