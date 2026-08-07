@@ -2,7 +2,8 @@ import Foundation
 
 public enum FileSystemOperations {
   public static func duplicateItem(at sourceURL: URL, in destinationDirectory: URL) throws -> URL {
-    let destinationName = uniqueName(for: sourceURL.lastPathComponent, in: destinationDirectory, style: .copy)
+    let destinationName = uniqueName(
+      for: sourceURL.lastPathComponent, in: destinationDirectory, style: .copy)
     let destinationURL = destinationDirectory.appendingPathComponent(destinationName)
     try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
     return destinationURL
@@ -22,7 +23,9 @@ public enum FileSystemOperations {
     case folder
   }
 
-  private static func uniqueName(for baseName: String, in directory: URL, style: NameStyle) -> String {
+  private static func uniqueName(for baseName: String, in directory: URL, style: NameStyle)
+    -> String
+  {
     let normalizedBase = baseName.trimmingCharacters(in: .whitespacesAndNewlines)
     let fileExtension = URL(fileURLWithPath: normalizedBase).pathExtension
     let hasExtension = !fileExtension.isEmpty && normalizedBase.contains(".")
@@ -37,14 +40,17 @@ public enum FileSystemOperations {
       extensionSuffix = ""
     }
 
-    let baseExists = FileManager.default.fileExists(atPath: directory.appendingPathComponent(normalizedBase).path)
+    let baseExists = FileManager.default.fileExists(
+      atPath: directory.appendingPathComponent(normalizedBase).path)
 
     switch style {
     case .copy:
       guard baseExists else { return normalizedBase }
       var candidateName = "\(nameWithoutExtension) copy\(extensionSuffix)"
       var suffix = 2
-      while FileManager.default.fileExists(atPath: directory.appendingPathComponent(candidateName).path) {
+      while FileManager.default.fileExists(
+        atPath: directory.appendingPathComponent(candidateName).path)
+      {
         candidateName = "\(nameWithoutExtension) copy \(suffix)\(extensionSuffix)"
         suffix += 1
       }
@@ -53,7 +59,9 @@ public enum FileSystemOperations {
       guard baseExists else { return normalizedBase }
       var candidateName = "\(normalizedBase) 2"
       var suffix = 3
-      while FileManager.default.fileExists(atPath: directory.appendingPathComponent(candidateName).path) {
+      while FileManager.default.fileExists(
+        atPath: directory.appendingPathComponent(candidateName).path)
+      {
         candidateName = "\(normalizedBase) \(suffix)"
         suffix += 1
       }

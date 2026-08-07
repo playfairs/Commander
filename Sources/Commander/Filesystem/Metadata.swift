@@ -1,5 +1,5 @@
-import Foundation
 import Darwin
+import Foundation
 
 public enum Metadata {
   public static func formattedMetadata(for url: URL) -> String {
@@ -71,7 +71,8 @@ public enum Metadata {
     if let fileSize = resourceValues?.fileSize {
       return ByteCountFormatter.string(fromByteCount: Int64(fileSize), countStyle: .file)
     }
-    return stringLabel((try? FileManager.default.attributesOfItem(atPath: url.path)[.size]) as? NSNumber)
+    return stringLabel(
+      (try? FileManager.default.attributesOfItem(atPath: url.path)[.size]) as? NSNumber)
       ?? "—"
   }
 

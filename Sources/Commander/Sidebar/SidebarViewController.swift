@@ -55,7 +55,8 @@ final class SidebarViewController: NSViewController {
       container.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
       container.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -8),
       contentView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
-      contentView.heightAnchor.constraint(greaterThanOrEqualTo: scrollView.contentView.heightAnchor),
+      contentView.heightAnchor.constraint(
+        greaterThanOrEqualTo: scrollView.contentView.heightAnchor),
     ])
 
     self.view = view

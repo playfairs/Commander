@@ -235,7 +235,6 @@ final class MainViewController: NSViewController, NSTextFieldDelegate {
     updateStatusBar()
   }
 
-
   func updateStatusBar() {
     guard let pane = activePane else {
       statusBar.stringValue = "Ready"
@@ -532,16 +531,21 @@ private final class BrowserPaneViewController: NSViewController {
     setupTableView()
 
     let actionButtons = NSStackView(views: [
-      addActionButton(title: "New Folder", symbolName: "folder.badge.plus", action: #selector(createNewFolder)),
-      addActionButton(title: "Duplicate", symbolName: "doc.on.doc", action: #selector(duplicateSelectedItem)),
-      addActionButton(title: "Open in Terminal", symbolName: "terminal", action: #selector(openInTerminal)),
+      addActionButton(
+        title: "New Folder", symbolName: "folder.badge.plus", action: #selector(createNewFolder)),
+      addActionButton(
+        title: "Duplicate", symbolName: "doc.on.doc", action: #selector(duplicateSelectedItem)),
+      addActionButton(
+        title: "Open in Terminal", symbolName: "terminal", action: #selector(openInTerminal)),
     ])
     actionButtons.orientation = .horizontal
     actionButtons.alignment = .centerY
     actionButtons.spacing = 6
     actionButtons.translatesAutoresizingMaskIntoConstraints = false
 
-    let navigationRow = NSStackView(views: [backButton, forwardButton, upButton, pathControl, actionButtons])
+    let navigationRow = NSStackView(views: [
+      backButton, forwardButton, upButton, pathControl, actionButtons,
+    ])
     navigationRow.orientation = .horizontal
     navigationRow.alignment = .centerY
     navigationRow.spacing = 8
@@ -1119,7 +1123,8 @@ private final class BrowserPaneViewController: NSViewController {
       let process = Process()
       process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
       process.currentDirectoryURL = parentURL
-      process.arguments = item.isDirectory
+      process.arguments =
+        item.isDirectory
         ? ["-r", destinationURL.path, sourceURL.lastPathComponent]
         : [destinationURL.path, sourceURL.lastPathComponent]
 
@@ -1129,7 +1134,9 @@ private final class BrowserPaneViewController: NSViewController {
       process.standardError = errorPipe
       outputPipe.fileHandleForReading.readabilityHandler = { handle in
         let data = handle.availableData
-        guard let line = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+        guard
+          let line = String(data: data, encoding: .utf8)?.trimmingCharacters(
+            in: .whitespacesAndNewlines),
           !line.isEmpty
         else { return }
         DispatchQueue.main.async { [weak self] in
@@ -1159,8 +1166,10 @@ private final class BrowserPaneViewController: NSViewController {
           return
         }
         if let message = commandMessage {
-          self.presentErrorAlert("Unable to compress item.", error: NSError(
-            domain: "Commander", code: 1, userInfo: [NSLocalizedDescriptionKey: message]))
+          self.presentErrorAlert(
+            "Unable to compress item.",
+            error: NSError(
+              domain: "Commander", code: 1, userInfo: [NSLocalizedDescriptionKey: message]))
           return
         }
         self.reloadCurrentDirectory()
@@ -1215,8 +1224,10 @@ private final class BrowserPaneViewController: NSViewController {
           return
         }
         if let message = commandMessage {
-          self.presentErrorAlert("Unable to gunzip item.", error: NSError(
-            domain: "Commander", code: 1, userInfo: [NSLocalizedDescriptionKey: message]))
+          self.presentErrorAlert(
+            "Unable to gunzip item.",
+            error: NSError(
+              domain: "Commander", code: 1, userInfo: [NSLocalizedDescriptionKey: message]))
           return
         }
         self.reloadCurrentDirectory()
@@ -1351,7 +1362,9 @@ private final class BrowserPaneViewController: NSViewController {
     }
   }
 
-  private func compare(_ lhs: DirectoryItem, _ rhs: DirectoryItem, by descriptor: NSSortDescriptor) -> ComparisonResult {
+  private func compare(_ lhs: DirectoryItem, _ rhs: DirectoryItem, by descriptor: NSSortDescriptor)
+    -> ComparisonResult
+  {
     if lhs.isParent != rhs.isParent {
       return lhs.isParent ? .orderedAscending : .orderedDescending
     }
@@ -1517,7 +1530,9 @@ extension BrowserPaneViewController: NSTableViewDataSource, NSTableViewDelegate 
     return item.url as NSURL
   }
 
-  func tableView(_ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) {
+  func tableView(
+    _ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]
+  ) {
     sortItems()
     tableView.reloadData()
   }
@@ -1535,16 +1550,20 @@ extension BrowserPaneViewController: NSTableViewDataSource, NSTableViewDelegate 
         let folderSize = DirectoryItem.folderSizeValue(for: folderURL)
         DispatchQueue.main.async {
           guard self.folderSizeGenerationID == currentGeneration else { return }
-          guard let currentIndex = self.items.firstIndex(where: { $0.url == folderURL }) else { return }
+          guard let currentIndex = self.items.firstIndex(where: { $0.url == folderURL }) else {
+            return
+          }
           self.items[currentIndex].sizeValue = folderSize
-          self.items[currentIndex].size = folderSize.map {
-            ByteCountFormatter.string(fromByteCount: $0, countStyle: .file)
-          } ?? "—"
+          self.items[currentIndex].size =
+            folderSize.map {
+              ByteCountFormatter.string(fromByteCount: $0, countStyle: .file)
+            } ?? "—"
           if self.tableView.sortDescriptors.contains(where: { $0.key == "sizeValue" }) {
             self.sortItems()
             self.tableView.reloadData()
           } else {
-            self.tableView.reloadData(forRowIndexes: IndexSet(integer: currentIndex), columnIndexes: IndexSet(integer: 2))
+            self.tableView.reloadData(
+              forRowIndexes: IndexSet(integer: currentIndex), columnIndexes: IndexSet(integer: 2))
           }
         }
       }
@@ -1581,7 +1600,7 @@ private struct DirectoryItem: Comparable {
       return
     }
 
-      let resourceValues = try? url.resourceValues(forKeys: [
+    let resourceValues = try? url.resourceValues(forKeys: [
       .isDirectoryKey, .contentTypeKey, .fileSizeKey, .contentModificationDateKey, .isHiddenKey,
     ])
     isDirectory = resourceValues?.isDirectory ?? false
@@ -1609,17 +1628,19 @@ private struct DirectoryItem: Comparable {
       modified = "—"
     }
 
-      let icon = NSWorkspace.shared.icon(forFile: url.path)
+    let icon = NSWorkspace.shared.icon(forFile: url.path)
     icon.size = NSSize(width: 16, height: 16)
     self.icon = icon
   }
 
   fileprivate static func folderSizeValue(for url: URL) -> Int64? {
-    guard let enumerator = FileManager.default.enumerator(
-      at: url,
-      includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
-      options: [.skipsHiddenFiles, .skipsPackageDescendants]
-    ) else {
+    guard
+      let enumerator = FileManager.default.enumerator(
+        at: url,
+        includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
+        options: [.skipsHiddenFiles, .skipsPackageDescendants]
+      )
+    else {
       return nil
     }
 
