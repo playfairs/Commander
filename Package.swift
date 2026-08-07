@@ -17,13 +17,14 @@ let package = Package(
       name: "Commander",
       path: ".",
       exclude: [
-        "scripts",
         "nix",
         "flake.nix",
         "flake.lock",
         "justfile",
         "README.md",
         "LICENSE",
+        "docs",
+        "Tests",
       ],
       sources: ["Sources/Commander"],
       resources: [
