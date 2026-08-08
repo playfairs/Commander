@@ -1,124 +1,35 @@
 import AppKit
+import Quartz
 import SwiftUI
 
 struct CommanderShellView: View {
   let session: Session
-  @State private var isSidebarVisible = true
+  @AppStorage("CommanderSidebarVisible") private var isSidebarVisible = true
+  @StateObject private var selectionStore = SelectionsStore()
+  @State private var openSelectionURL: URL?
 
   var body: some View {
     HStack(spacing: 0) {
       if isSidebarVisible {
-        SidebarView()
-          .frame(width: 260)
-          .background(Color(nsColor: .controlBackgroundColor))
+        SidebarView(selectionStore: selectionStore) { url in
+          openSelectionURL = url
+        }
+        .frame(width: 260)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .transition(.move(edge: .leading).combined(with: .opacity))
 
         Divider()
       }
 
-      MainBrowserView(session: session, isSidebarVisible: $isSidebarVisible)
+      MainBrowserView(
+        session: session,
+        isSidebarVisible: $isSidebarVisible,
+        selectionStore: selectionStore,
+        openSelectionURL: $openSelectionURL)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(Color(nsColor: .windowBackgroundColor))
   }
-}
-
-struct SidebarView: View {
-  @StateObject private var store = SidebarSectionStore()
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      VStack(alignment: .leading, spacing: 8) {
-        Text("Locations")
-          .font(.system(size: 12, weight: .semibold))
-          .foregroundStyle(.secondary)
-
-        ForEach(store.sections) { section in
-          Button(action: { /* future me needs to change this section ok? */  }) {
-            HStack(spacing: 8) {
-              Image(systemName: "folder")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-              Text(section.title)
-                .font(.system(size: 13, weight: .regular))
-                .foregroundColor(.primary)
-                .lineLimit(1)
-            }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(nsColor: .controlBackgroundColor))
-          }
-          .buttonStyle(.plain)
-        }
-
-        HStack {
-          Spacer()
-          Button(action: {
-            _ = store.addSection(rootURL: FileManager.default.homeDirectoryForCurrentUser)
-          }) {
-            Image(systemName: "plus")
-              .font(.system(size: 12, weight: .semibold))
-              .frame(width: 26, height: 26)
-          }
-          .buttonStyle(.bordered)
-          .controlSize(.small)
-          .help("Add section")
-        }
-        .padding(.top, 6)
-      }
-      .padding(12)
-
-      Divider()
-        .padding(.horizontal, 12)
-
-      Text("Favorites")
-        .font(.system(size: 12, weight: .semibold))
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 12)
-        .padding(.top, 10)
-
-      List(favoriteLocations, id: \.title) { location in
-        Button(action: { location.action() }) {
-          HStack(spacing: 8) {
-            Image(systemName: location.iconName)
-              .frame(width: 18)
-            Text(location.title)
-              .font(.system(size: 13))
-          }
-          .padding(.vertical, 6)
-        }
-        .buttonStyle(.plain)
-      }
-      .listStyle(.sidebar)
-      .padding(.horizontal, 4)
-
-      Spacer()
-    }
-    .background(Color(nsColor: .controlBackgroundColor))
-  }
-
-  private var favoriteLocations: [FavoriteLocation] {
-    [
-      FavoriteLocation(title: "Home", iconName: "house.fill") {
-        // placeholder action until I get this logic sorted out
-      },
-      FavoriteLocation(title: "Desktop", iconName: "desktopcomputer") {
-        // placeholder action until I get this logic sorted out
-      },
-      FavoriteLocation(title: "Documents", iconName: "doc.richtext") {
-        // placeholder action until I get this logic sorted out
-      },
-      FavoriteLocation(title: "Downloads", iconName: "arrow.down.circle") {
-        // placeholder action until I get this logic sorted out
-      },
-    ]
-  }
-}
-
-private struct FavoriteLocation {
-  let title: String
-  let iconName: String
-  let action: () -> Void
 }
 
 struct MainBrowserView: View {
@@ -126,16 +37,33 @@ struct MainBrowserView: View {
   @Binding var isSidebarVisible: Bool
   @StateObject private var leftModel: BrowserPaneModel
   @StateObject private var rightModel: BrowserPaneModel
-  @State private var selectedVolumeURL: URL?
+  @State private var activePane: ActivePane = .left
+  @ObservedObject var selectionStore: SelectionsStore
+  @Binding var openSelectionURL: URL?
   @State private var searchText = ""
 
-  init(session: Session, isSidebarVisible: Binding<Bool>) {
+  init(
+    session: Session,
+    isSidebarVisible: Binding<Bool>,
+    selectionStore: SelectionsStore,
+    openSelectionURL: Binding<URL?>
+  ) {
     self.session = session
     self._isSidebarVisible = isSidebarVisible
     _leftModel = StateObject(wrappedValue: BrowserPaneModel(rootURL: session.rootURL))
     let rightURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop")
     _rightModel = StateObject(wrappedValue: BrowserPaneModel(rootURL: rightURL))
-    _selectedVolumeURL = State(initialValue: session.rootURL)
+    self._selectionStore = ObservedObject(wrappedValue: selectionStore)
+    self._openSelectionURL = openSelectionURL
+  }
+
+  private enum ActivePane {
+    case left
+    case right
+  }
+
+  private var activeModel: BrowserPaneModel {
+    activePane == .left ? leftModel : rightModel
   }
 
   var body: some View {
@@ -152,21 +80,34 @@ struct MainBrowserView: View {
       Divider()
 
       HStack(spacing: 12) {
-        BrowserPaneView(title: "Left Pane", model: leftModel)
-          .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-          .background(Color(nsColor: .textBackgroundColor))
-          .cornerRadius(8)
+        BrowserPaneView(
+          title: "Left Pane", model: leftModel, selectionStore: selectionStore,
+          isActive: activePane == .left, onActivate: { activePane = .left }
+        )
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+        .background(Color(nsColor: .textBackgroundColor))
+        .cornerRadius(8)
 
-        BrowserPaneView(title: "Right Pane", model: rightModel)
-          .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-          .background(Color(nsColor: .textBackgroundColor))
-          .cornerRadius(8)
+        BrowserPaneView(
+          title: "Right Pane", model: rightModel, selectionStore: selectionStore,
+          isActive: activePane == .right, onActivate: { activePane = .right }
+        )
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+        .background(Color(nsColor: .textBackgroundColor))
+        .cornerRadius(8)
       }
       .padding(12)
 
       Divider()
 
       bottomStatusBar
+    }
+    .onChange(of: openSelectionURL) { url in
+      guard let url else { return }
+      Task {
+        await activeModel.loadDirectory(url, replaceHistory: true)
+        openSelectionURL = nil
+      }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(Color(nsColor: .windowBackgroundColor))
@@ -175,19 +116,19 @@ struct MainBrowserView: View {
   private var header: some View {
     HStack(spacing: 12) {
       HStack(spacing: 8) {
-        Image(
-          systemName: selectedVolumeURL == nil
-            ? "externaldrive" : volumeIconName(for: selectedVolumeURL!)
-        )
-        .foregroundColor(.accentColor)
+        Image(systemName: volumeIconName(for: activeModel.currentURL))
+          .foregroundColor(.accentColor)
 
         VStack(alignment: .leading, spacing: 2) {
           Text("Commander")
             .font(.system(size: 15, weight: .bold))
-          Text(selectedVolumeURL?.lastPathComponent ?? session.rootURL.lastPathComponent)
-            .font(.system(size: 11))
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
+          Text(
+            activeModel.currentURL.lastPathComponent.isEmpty
+              ? activeModel.currentURL.path : activeModel.currentURL.lastPathComponent
+          )
+          .font(.system(size: 11))
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
         }
       }
 
@@ -236,9 +177,7 @@ struct MainBrowserView: View {
           ForEach(volumeURLs, id: \.path) { volume in
             Button {
               Task {
-                selectedVolumeURL = volume
-                await leftModel.loadDirectory(volume, replaceHistory: true)
-                await rightModel.loadDirectory(volume, replaceHistory: true)
+                await activeModel.loadDirectory(volume, replaceHistory: true)
               }
             } label: {
               HStack(spacing: 6) {
@@ -249,10 +188,10 @@ struct MainBrowserView: View {
               .padding(.horizontal, 10)
               .padding(.vertical, 6)
               .background(
-                selectedVolumeURL == volume
+                activeModel.currentURL == volume
                   ? Color(nsColor: .selectedControlColor) : Color(nsColor: .controlBackgroundColor)
               )
-              .foregroundColor(selectedVolumeURL == volume ? .white : .primary)
+              .foregroundColor(activeModel.currentURL == volume ? .white : .primary)
               .cornerRadius(8)
             }
             .buttonStyle(.plain)
@@ -335,6 +274,9 @@ struct SearchField: View {
 struct BrowserPaneView: View {
   let title: String
   @ObservedObject var model: BrowserPaneModel
+  @ObservedObject var selectionStore: SelectionsStore
+  let isActive: Bool
+  let onActivate: () -> Void
 
   var body: some View {
     VStack(spacing: 0) {
@@ -352,17 +294,26 @@ struct BrowserPaneView: View {
       .background(Color(nsColor: .controlBackgroundColor))
 
       HStack(spacing: 10) {
-        Button(action: model.goBack) { Image(systemName: "chevron.left") }
-          .buttonStyle(.plain)
-          .disabled(!model.canGoBack)
+        Button(action: {
+          onActivate()
+          model.goBack()
+        }) { Image(systemName: "chevron.left") }
+        .buttonStyle(.plain)
+        .disabled(!model.canGoBack)
 
-        Button(action: model.goForward) { Image(systemName: "chevron.right") }
-          .buttonStyle(.plain)
-          .disabled(!model.canGoForward)
+        Button(action: {
+          onActivate()
+          model.goForward()
+        }) { Image(systemName: "chevron.right") }
+        .buttonStyle(.plain)
+        .disabled(!model.canGoForward)
 
-        Button(action: model.goUp) { Image(systemName: "arrow.up") }
-          .buttonStyle(.plain)
-          .disabled(!model.canGoUp)
+        Button(action: {
+          onActivate()
+          model.goUp()
+        }) { Image(systemName: "arrow.up") }
+        .buttonStyle(.plain)
+        .disabled(!model.canGoUp)
 
         Spacer()
 
@@ -379,6 +330,7 @@ struct BrowserPaneView: View {
         Color.clear
           .contentShape(Rectangle())
           .onTapGesture {
+            onActivate()
             model.selectedItemId = nil
           }
 
@@ -392,22 +344,61 @@ struct BrowserPaneView: View {
               }
               Text(item.name)
                 .lineLimit(1)
+              Spacer()
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .onTapGesture {
+              onActivate()
               model.selectedItemId = item.id
             }
             .onTapGesture(count: 2) {
+              onActivate()
               model.selectedItemId = item.id
               model.activateSelectedItem()
             }
             .contextMenu {
               Button("Open") {
+                onActivate()
                 model.selectedItemId = item.id
                 model.activateSelectedItem()
               }
-              Button("Refresh") {
-                Task { await model.reloadCurrentDirectory() }
+              Button("Quick Look") {
+                onActivate()
+                model.selectedItemId = item.id
+                model.quickLookSelectedItem()
+              }
+              Button("Rename") {
+                onActivate()
+                model.selectedItemId = item.id
+                model.renameSelectedItem()
+              }
+              Button("Show in Finder") {
+                onActivate()
+                model.selectedItemId = item.id
+                model.revealSelectedItemInFinder()
+              }
+              Button("Move to Trash") {
+                onActivate()
+                model.selectedItemId = item.id
+                model.moveSelectedItemToTrash()
+              }
+              Button("Delete Immediately") {
+                onActivate()
+                model.selectedItemId = item.id
+                model.deleteSelectedItemImmediately()
+              }
+              Button("Get Info") {
+                onActivate()
+                model.selectedItemId = item.id
+                model.openInfoForSelectedItem()
+              }
+              if item.isDirectory && item.name != ".." {
+                Button("Favorite") {
+                  onActivate()
+                  model.selectedItemId = item.id
+                  selectionStore.addSelection(item.url)
+                }
               }
             }
           }
@@ -434,6 +425,7 @@ struct BrowserPaneView: View {
         .tableStyle(.inset)
       }
       .onChange(of: model.selectedItemId) { _, _ in
+        onActivate()
         model.onSelectionChanged()
       }
       .padding(.horizontal, 8)
@@ -451,10 +443,15 @@ struct BrowserPaneView: View {
     }
     .background(Color(nsColor: .windowBackgroundColor))
     .cornerRadius(8)
+    .overlay(
+      RoundedRectangle(cornerRadius: 8)
+        .stroke(isActive ? Color.accentColor.opacity(0.35) : Color.clear, lineWidth: 2)
+    )
     .shadow(color: Color.black.opacity(0.04), radius: 2, x: 0, y: 1)
+    .contentShape(Rectangle())
+    .onTapGesture { onActivate() }
   }
 }
-
 @MainActor
 final class BrowserPaneModel: ObservableObject {
   @Published var items: [BrowserFileItem] = []
@@ -545,10 +542,94 @@ final class BrowserPaneModel: ObservableObject {
     Task { await loadDirectory(parent, replaceHistory: false) }
   }
 
+  func quickLookSelectedItem() {
+    guard let id = selectedItemId,
+      let selected = items.first(where: { $0.id == id }),
+      !selected.isDirectory || selected.name != ".."
+    else { return }
+    NSWorkspace.shared.open(selected.url)
+  }
+
+  func renameSelectedItem() {
+    guard let id = selectedItemId,
+      let selected = items.first(where: { $0.id == id }),
+      selected.name != ".."
+    else { return }
+    renameItem(selected)
+  }
+
+  func revealSelectedItemInFinder() {
+    guard let id = selectedItemId,
+      let selected = items.first(where: { $0.id == id }),
+      !selected.name.starts(with: "..")
+    else { return }
+    NSWorkspace.shared.activateFileViewerSelecting([selected.url])
+  }
+
+  func moveSelectedItemToTrash() {
+    guard let id = selectedItemId,
+      let selected = items.first(where: { $0.id == id }),
+      selected.name != ".."
+    else { return }
+    do {
+      try FileManager.default.trashItem(at: selected.url, resultingItemURL: nil)
+      Task { await reloadCurrentDirectory() }
+    } catch {
+      // overly simplified model, will work on expanding this shit when I feel like it ok?
+    }
+  }
+
+  func deleteSelectedItemImmediately() {
+    guard let id = selectedItemId,
+      let selected = items.first(where: { $0.id == id }),
+      selected.name != ".."
+    else { return }
+    do {
+      try FileManager.default.removeItem(at: selected.url)
+      Task { await reloadCurrentDirectory() }
+    } catch {
+      // overly simplified model, will work on expanding this shit when I feel like it ok?
+    }
+  }
+
+  func openInfoForSelectedItem() {
+    guard let id = selectedItemId,
+      let selected = items.first(where: { $0.id == id }),
+      !selected.name.starts(with: "..")
+    else { return }
+    NSWorkspace.shared.activateFileViewerSelecting([selected.url])
+  }
+
   private func parentURL(for url: URL) -> URL? {
     let parent = url.deletingLastPathComponent()
     guard parent.path != url.path else { return nil }
     return parent
+  }
+
+  private func renameItem(_ item: BrowserFileItem) {
+    let alert = NSAlert()
+    alert.messageText = "Rename"
+    alert.informativeText = "Enter a new name for \(item.name):"
+    alert.alertStyle = .informational
+    alert.addButton(withTitle: "Rename")
+    alert.addButton(withTitle: "Cancel")
+
+    let textField = NSTextField(string: item.name)
+    textField.frame = NSRect(x: 0, y: 0, width: 320, height: 24)
+    alert.accessoryView = textField
+    alert.window.initialFirstResponder = textField
+
+    if alert.runModal() == .alertFirstButtonReturn {
+      let newName = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !newName.isEmpty else { return }
+      let destination = item.url.deletingLastPathComponent().appendingPathComponent(newName)
+      do {
+        try FileManager.default.moveItem(at: item.url, to: destination)
+        Task { await reloadCurrentDirectory() }
+      } catch {
+        // overly simplified model, will work on expanding this shit when I feel like it ok?
+      }
+    }
   }
 
   private func isDirectory(_ url: URL) async -> Bool {
