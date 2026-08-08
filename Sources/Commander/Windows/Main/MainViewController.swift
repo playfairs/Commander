@@ -188,19 +188,19 @@ final class MainViewController: NSViewController, NSTextFieldDelegate {
     updateStatusBar()
   }
 
-  func handleToolbarAction(_ identifier: NSToolbarItem.Identifier) {
+  func handleToolbarAction(_ identifier: String) {
     switch identifier {
-    case .back:
+    case "back":
       activePane?.goBack()
-    case .forward:
+    case "forward":
       activePane?.goForward()
-    case .reveal:
+    case "reveal":
       activePane?.revealInFinder()
-    case .viewList:
+    case "viewList":
       activePane?.setListViewMode()
-    case .viewGrid:
+    case "viewGrid":
       activePane?.setIconViewMode()
-    case .info:
+    case "info":
       activePane?.showSelectedInfo()
     default:
       break
@@ -1242,7 +1242,6 @@ private final class BrowserPaneViewController: NSViewController {
   }
 
   private func playSuccessSound() {
-      /// If `Crystal` doesn't exist theres something wrong with your Mac, so this is fine.
       NSSound(named: NSSound.Name("Crystal")).unsafelyUnwrapped.play()
   }
 

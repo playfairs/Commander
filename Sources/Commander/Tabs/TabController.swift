@@ -1,4 +1,4 @@
-import AppKit
+import Foundation
 
 final class TabController {
   typealias StateChangedHandler = (TabState) -> Void
