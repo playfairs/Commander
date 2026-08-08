@@ -26,6 +26,9 @@ let package = Package(
         "docs",
         "Tests",
         "femboys.txt",
+        "TODO.md",
+        "issues",
+        "Sources/Commander/main.swift",
       ],
       sources: ["Sources/Commander"],
       resources: [
