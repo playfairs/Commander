@@ -1,5 +1,5 @@
-import SwiftUI
 import AppKit
+import SwiftUI
 
 struct CommanderShellView: View {
   let session: Session
@@ -33,27 +33,29 @@ struct SidebarView: View {
           .foregroundStyle(.secondary)
 
         ForEach(store.sections) { section in
-        Button(action: { /* future me needs to change this section ok? */ }) {
-          HStack(spacing: 8) {
-            Image(systemName: "folder")
-              .font(.system(size: 12))
-              .foregroundStyle(.secondary)
-            Text(section.title)
-              .font(.system(size: 13, weight: .regular))
-              .foregroundColor(.primary)
-              .lineLimit(1)
+          Button(action: { /* future me needs to change this section ok? */  }) {
+            HStack(spacing: 8) {
+              Image(systemName: "folder")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+              Text(section.title)
+                .font(.system(size: 13, weight: .regular))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(nsColor: .controlBackgroundColor))
           }
-          .padding(.vertical, 8)
-          .padding(.horizontal, 10)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .background(Color(nsColor: .controlBackgroundColor))
+          .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
-      }
 
-      HStack {
+        HStack {
           Spacer()
-          Button(action: { _ = store.addSection(rootURL: FileManager.default.homeDirectoryForCurrentUser) }) {
+          Button(action: {
+            _ = store.addSection(rootURL: FileManager.default.homeDirectoryForCurrentUser)
+          }) {
             Image(systemName: "plus")
               .font(.system(size: 12, weight: .semibold))
               .frame(width: 26, height: 26)
@@ -173,8 +175,11 @@ struct MainBrowserView: View {
   private var header: some View {
     HStack(spacing: 12) {
       HStack(spacing: 8) {
-        Image(systemName: selectedVolumeURL == nil ? "externaldrive" : volumeIconName(for: selectedVolumeURL!))
-          .foregroundColor(.accentColor)
+        Image(
+          systemName: selectedVolumeURL == nil
+            ? "externaldrive" : volumeIconName(for: selectedVolumeURL!)
+        )
+        .foregroundColor(.accentColor)
 
         VStack(alignment: .leading, spacing: 2) {
           Text("Commander")
@@ -243,7 +248,10 @@ struct MainBrowserView: View {
               .font(.system(size: 12, weight: .regular))
               .padding(.horizontal, 10)
               .padding(.vertical, 6)
-              .background(selectedVolumeURL == volume ? Color(nsColor: .selectedControlColor) : Color(nsColor: .controlBackgroundColor))
+              .background(
+                selectedVolumeURL == volume
+                  ? Color(nsColor: .selectedControlColor) : Color(nsColor: .controlBackgroundColor)
+              )
               .foregroundColor(selectedVolumeURL == volume ? .white : .primary)
               .cornerRadius(8)
             }
@@ -294,7 +302,10 @@ struct MainBrowserView: View {
   private var volumeURLs: [URL] {
     (FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: nil, options: []) ?? [])
       .filter { $0.path.hasPrefix("/Volumes") }
-      .sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
+      .sorted {
+        $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent)
+          == .orderedAscending
+      }
   }
 
   private func volumeIconName(for volume: URL) -> String {
@@ -475,7 +486,8 @@ final class BrowserPaneModel: ObservableObject {
     let resourceKeys: Set<URLResourceKey> = [
       .isDirectoryKey, .contentTypeKey, .fileSizeKey, .contentModificationDateKey, .isHiddenKey,
     ]
-    let options: FileManager.DirectoryEnumerationOptions = showHiddenFiles ? [] : [.skipsHiddenFiles]
+    let options: FileManager.DirectoryEnumerationOptions =
+      showHiddenFiles ? [] : [.skipsHiddenFiles]
     do {
       let urls = try FileManager.default.contentsOfDirectory(
         at: url,
@@ -509,7 +521,8 @@ final class BrowserPaneModel: ObservableObject {
 
   func activateSelectedItem() {
     guard let id = selectedItemId,
-          let selected = items.first(where: { $0.id == id }) else { return }
+      let selected = items.first(where: { $0.id == id })
+    else { return }
     if selected.isDirectory {
       Task { await loadDirectory(selected.url, replaceHistory: false) }
     }
@@ -592,7 +605,10 @@ struct BrowserFileItem: Identifiable, Comparable {
     )
   }
 
-  private init(url: URL, name: String, isDirectory: Bool, kind: String, size: String, modified: String, icon: NSImage?) {
+  private init(
+    url: URL, name: String, isDirectory: Bool, kind: String, size: String, modified: String,
+    icon: NSImage?
+  ) {
     self.url = url
     self.name = name
     self.isDirectory = isDirectory

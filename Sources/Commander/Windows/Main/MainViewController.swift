@@ -1242,7 +1242,7 @@ private final class BrowserPaneViewController: NSViewController {
   }
 
   private func playSuccessSound() {
-      NSSound(named: NSSound.Name("Crystal")).unsafelyUnwrapped.play()
+    NSSound(named: NSSound.Name("Crystal")).unsafelyUnwrapped.play()
   }
 
   private func reloadSiblingPanesAfterMove(from sourceFolders: [URL]) {
