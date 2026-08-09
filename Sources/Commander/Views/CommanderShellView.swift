@@ -102,8 +102,8 @@ struct MainBrowserView: View {
 
       bottomStatusBar
     }
-    .onChange(of: openSelectionURL) { url in
-      guard let url else { return }
+    .onChange(of: openSelectionURL) { oldURL, newURL in
+      guard let url = newURL else { return }
       Task {
         await activeModel.loadDirectory(url, replaceHistory: true)
         openSelectionURL = nil
