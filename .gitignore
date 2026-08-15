@@ -2,3 +2,6 @@
 .build/
 build
 target
+.swiftpm/xcode/xcuserdata/
+/.swiftpm/xcode/package.xcworkspace/xcuserdata/playfairs.xcuserdatad
+/.swiftpm/xcode/package.xcworkspace/xcuserdata/playfairs.xcuserdatad
