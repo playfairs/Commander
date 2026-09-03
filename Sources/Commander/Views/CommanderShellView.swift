@@ -341,6 +341,8 @@ struct BrowserPaneView: View {
                 Image(nsImage: icon)
                   .resizable()
                   .frame(width: 14, height: 14)
+              } else {
+                BrowserFileIcon(url: item.url)
               }
               Text(item.name)
                 .lineLimit(1)
@@ -348,15 +350,19 @@ struct BrowserPaneView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
-            .onTapGesture {
-              onActivate()
-              model.selectedItemId = item.id
-            }
-            .onTapGesture(count: 2) {
-              onActivate()
-              model.selectedItemId = item.id
-              model.activateSelectedItem()
-            }
+            .simultaneousGesture(
+              TapGesture().onEnded {
+                onActivate()
+                model.selectedItemId = item.id
+              }
+            )
+            .simultaneousGesture(
+              TapGesture(count: 2).onEnded {
+                onActivate()
+                model.selectedItemId = item.id
+                model.activateSelectedItem()
+              }
+            )
             .contextMenu {
               Button("Open") {
                 onActivate()
@@ -406,19 +412,64 @@ struct BrowserPaneView: View {
 
           TableColumn("Kind") { item in
             Text(item.kind)
+              .frame(maxWidth: .infinity, alignment: .leading)
               .foregroundStyle(.secondary)
+              .contentShape(Rectangle())
+              .simultaneousGesture(
+                TapGesture().onEnded {
+                  onActivate()
+                  model.selectedItemId = item.id
+                }
+              )
+              .simultaneousGesture(
+                TapGesture(count: 2).onEnded {
+                  onActivate()
+                  model.selectedItemId = item.id
+                  model.activateSelectedItem()
+                }
+              )
           }
           .width(min: 100, ideal: 150)
 
           TableColumn("Size") { item in
             Text(item.size)
+              .frame(maxWidth: .infinity, alignment: .leading)
               .foregroundStyle(.secondary)
+              .contentShape(Rectangle())
+              .simultaneousGesture(
+                TapGesture().onEnded {
+                  onActivate()
+                  model.selectedItemId = item.id
+                }
+              )
+              .simultaneousGesture(
+                TapGesture(count: 2).onEnded {
+                  onActivate()
+                  model.selectedItemId = item.id
+                  model.activateSelectedItem()
+                }
+              )
           }
           .width(min: 100, ideal: 120)
 
           TableColumn("Modified") { item in
             Text(item.modified)
+              .frame(maxWidth: .infinity, alignment: .leading)
               .foregroundStyle(.secondary)
+              .contentShape(Rectangle())
+              .simultaneousGesture(
+                TapGesture().onEnded {
+                  onActivate()
+                  model.selectedItemId = item.id
+                }
+              )
+              .simultaneousGesture(
+                TapGesture(count: 2).onEnded {
+                  onActivate()
+                  model.selectedItemId = item.id
+                  model.activateSelectedItem()
+                }
+              )
           }
           .width(min: 140, ideal: 160)
         }
@@ -449,7 +500,6 @@ struct BrowserPaneView: View {
     )
     .shadow(color: Color.black.opacity(0.04), radius: 2, x: 0, y: 1)
     .contentShape(Rectangle())
-    .onTapGesture { onActivate() }
   }
 }
 @MainActor
@@ -463,6 +513,8 @@ final class BrowserPaneModel: ObservableObject {
 
   private var history: [URL] = []
   private var historyIndex = 0
+  private var loadTask: Task<Void, Never>?
+  private var loadGeneration = UUID()
 
   var canGoBack: Bool { historyIndex > 0 }
   var canGoForward: Bool { historyIndex + 1 < history.count }
@@ -478,36 +530,39 @@ final class BrowserPaneModel: ObservableObject {
   }
 
   func loadDirectory(_ url: URL, replaceHistory: Bool) async {
-    guard await isDirectory(url) else { return }
-    currentURL = url
-    let resourceKeys: Set<URLResourceKey> = [
-      .isDirectoryKey, .contentTypeKey, .fileSizeKey, .contentModificationDateKey, .isHiddenKey,
-    ]
-    let options: FileManager.DirectoryEnumerationOptions =
-      showHiddenFiles ? [] : [.skipsHiddenFiles]
-    do {
-      let urls = try FileManager.default.contentsOfDirectory(
-        at: url,
-        includingPropertiesForKeys: Array(resourceKeys),
-        options: options)
-      let filtered = urls.filter { showHiddenFiles || !$0.lastPathComponent.hasPrefix(".") }
-      let loadedItems = try filtered.map { url in
-        try BrowserFileItem(url: url, resourceKeys: resourceKeys)
+    loadTask?.cancel()
+    let generation = UUID()
+    loadGeneration = generation
+    let includeHiddenFiles = showHiddenFiles
+
+    let task = Task { [weak self] in
+      do {
+        let snapshots = try await Task.detached(priority: .userInitiated) {
+          try BrowserFileSnapshot.load(from: url, showHiddenFiles: includeHiddenFiles)
+        }.value
+        guard !Task.isCancelled, let self, self.loadGeneration == generation else { return }
+
+        var loadedItems = snapshots.map(BrowserFileItem.init(snapshot:)).sorted()
+        if let parent = self.parentURL(for: url) {
+          loadedItems.insert(BrowserFileItem.parentItem(parent), at: 0)
+        }
+        self.items = loadedItems
+        self.currentURL = url
+        if replaceHistory {
+          self.history = [url]
+          self.historyIndex = 0
+        } else {
+          self.history = Array(self.history.prefix(self.historyIndex + 1)) + [url]
+          self.historyIndex += 1
+        }
+      } catch is CancellationError {
+        return
+      } catch {
+        guard let self, self.loadGeneration == generation else { return }
+        self.items = []
       }
-      items = loadedItems.sorted()
-      if let parent = parentURL(for: url) {
-        items.insert(BrowserFileItem.parentItem(parent), at: 0)
-      }
-      if replaceHistory {
-        history = [url]
-        historyIndex = 0
-      } else {
-        history = Array(history.prefix(historyIndex + 1)) + [url]
-        historyIndex += 1
-      }
-    } catch {
-      items = []
     }
+    loadTask = task
   }
 
   func onSelectionChanged() {}
@@ -632,9 +687,83 @@ final class BrowserPaneModel: ObservableObject {
     }
   }
 
-  private func isDirectory(_ url: URL) async -> Bool {
-    let resourceValues = try? url.resourceValues(forKeys: [.isDirectoryKey])
-    return resourceValues?.isDirectory == true
+}
+
+private struct BrowserFileSnapshot: Sendable {
+  let url: URL
+  let name: String
+  let isDirectory: Bool
+  let kind: String
+  let size: String
+  let modified: String
+
+  static func load(from url: URL, showHiddenFiles: Bool) throws -> [BrowserFileSnapshot] {
+    let resourceKeys: Set<URLResourceKey> = [
+      .isDirectoryKey, .contentTypeKey, .fileSizeKey, .contentModificationDateKey,
+    ]
+    let resourceValues = try url.resourceValues(forKeys: [.isDirectoryKey])
+    guard resourceValues.isDirectory == true else { return [] }
+
+    let options: FileManager.DirectoryEnumerationOptions =
+      showHiddenFiles ? [] : [.skipsHiddenFiles]
+    let urls = try FileManager.default.contentsOfDirectory(
+      at: url, includingPropertiesForKeys: Array(resourceKeys), options: options)
+    return
+      try urls
+      .filter { showHiddenFiles || !$0.lastPathComponent.hasPrefix(".") }
+      .map { try BrowserFileSnapshot(url: $0, resourceKeys: resourceKeys) }
+  }
+
+  init(url: URL, resourceKeys: Set<URLResourceKey>) throws {
+    self.url = url
+    name = url.lastPathComponent
+    let resourceValues = try url.resourceValues(forKeys: resourceKeys)
+    isDirectory = resourceValues.isDirectory ?? false
+    if let contentType = resourceValues.contentType {
+      kind = isDirectory ? "Folder" : (contentType.localizedDescription ?? contentType.identifier)
+    } else {
+      kind =
+        isDirectory
+        ? "Folder" : (url.pathExtension.isEmpty ? "File" : url.pathExtension.uppercased())
+    }
+    if let fileSize = resourceValues.fileSize, !isDirectory {
+      size = ByteCountFormatter.string(fromByteCount: Int64(fileSize), countStyle: .file)
+    } else {
+      size = isDirectory ? "—" : "0 bytes"
+    }
+    modified =
+      resourceValues.contentModificationDate?.formatted(
+        date: .abbreviated, time: .shortened) ?? "—"
+  }
+}
+
+@MainActor
+private struct BrowserFileIcon: View {
+  private static let cache = NSCache<NSURL, NSImage>()
+  let url: URL
+  @State private var icon: NSImage?
+
+  var body: some View {
+    Group {
+      if let icon {
+        Image(nsImage: icon)
+          .resizable()
+          .frame(width: 14, height: 14)
+      } else {
+        Color.clear.frame(width: 14, height: 14)
+      }
+    }
+    .task(id: url) {
+      let cacheKey = url as NSURL
+      if let cached = Self.cache.object(forKey: cacheKey) {
+        icon = cached
+        return
+      }
+      let loaded = NSWorkspace.shared.icon(forFile: url.path)
+      loaded.size = NSSize(width: 16, height: 16)
+      Self.cache.setObject(loaded, forKey: cacheKey)
+      icon = loaded
+    }
   }
 }
 
@@ -647,6 +776,16 @@ struct BrowserFileItem: Identifiable, Comparable {
   let size: String
   let modified: String
   let icon: NSImage?
+
+  fileprivate init(snapshot: BrowserFileSnapshot) {
+    url = snapshot.url
+    name = snapshot.name
+    isDirectory = snapshot.isDirectory
+    kind = snapshot.kind
+    size = snapshot.size
+    modified = snapshot.modified
+    icon = nil
+  }
 
   init(url: URL, resourceKeys: Set<URLResourceKey>) throws {
     self.url = url
